@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(php -l app/Http/Controllers/Coach/DashboardController.php)",
+      "Bash(php artisan *)",
+      "Bash(netstat -ano)",
+      "Read(//c/xampp/**)",
+      "Bash(tasklist)",
+      "Bash(cmd //c \"mysql_start.bat\")",
+      "PowerShell(Test-NetConnection *)",
+      "WebFetch(domain:hpacademya.com)",
+      "Bash(php -l app/Http/Controllers/Coach/SessionReportController.php)",
+      "Bash(php -l app/Console/Commands/SendDueReminders.php)",
+      "Bash(php -l app/Notifications/PaymentDueNotification.php)",
+      "Bash(php -l app/Notifications/AssignmentReminderNotification.php)",
+      "WebFetch(domain:my.hpacademya.com)",
+      "Bash(php -l app/Http/Controllers/MessageController.php)",
+      "Bash(php -l resources/views/student/dashboard.blade.php)"
+    ]
+  }
+}
