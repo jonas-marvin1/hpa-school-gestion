@@ -125,3 +125,14 @@ Avant de proposer une modification, lire le code existant concerné plutôt
 que de supposer sa structure. Après chaque point : lancer `php artisan test`
 et signaler tout test cassé avant de proposer le commit. Ne jamais créer de
 migration sans l'annoncer explicitement au préalable.
+
+## Tenue du journal
+
+Apres chaque point livre, avant de proposer le commit, mettre a jour le
+fichier de fiche correspondant dans `docs/fiches/` :
+
+- passer la ligne du point a « Livre » dans le tableau d'avancement ;
+- ajouter sous « Decisions de perimetre » toute decision non evidente prise
+  pendant le developpement, avec sa raison en une phrase.
+
+Ne consigner que ce qui ne se devine pas a la lecture du code.
