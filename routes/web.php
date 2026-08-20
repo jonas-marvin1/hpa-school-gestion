@@ -66,6 +66,10 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->grou
     Route::post('/apprenants/{student}/plan-paiement', [\App\Http\Controllers\Admin\PaymentPlanController::class, 'store'])->name('students.plan.store');
     Route::patch('/echeances/{echeance}/payee', [\App\Http\Controllers\Admin\PaymentPlanController::class, 'marquerPayee'])->name('echeances.payee');
 
+    // Vision previsionnelle des paiements attendus, tous apprenants
+    // confondus, mois par mois (point 6).
+    Route::get('/paiements-attendus', [\App\Http\Controllers\Admin\StudentPaymentController::class, 'index'])->name('student-payments.index');
+
     Route::get('/submissions', [\App\Http\Controllers\Admin\SubmissionArchiveController::class, 'index'])->name('submissions.index');
     // Declaree avant /submissions/{submission} : sinon "export" serait
     // capture comme identifiant de rendu.

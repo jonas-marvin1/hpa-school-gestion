@@ -285,4 +285,92 @@ class AdminTest extends TestCase
         $response->assertRedirect(route('admin.classes.index'));
         $this->assertDatabaseHas('course_classes', ['name' => 'Class A']);
     }
+
+    public function test_admin_can_view_expected_payments_for_a_month(): void
+    {
+        $program = Program::factory()->create(['name' => 'Programme Paiement']);
+        $student = User::factory()->create(['name' => 'Apprenant Attendu']);
+        $student->assignRole('student');
+
+        $plan = \App\Models\PaymentPlan::create([
+            'student_id'     => $student->id,
+            'program_id'     => $program->id,
+            'total_amount'   => 300000,
+            'advance_amount' => 0,
+        ]);
+
+        // Echeance payee, dans le mois filtre.
+        \App\Models\StudentPayment::create([
+            'student_id'      => $student->id,
+            'program_id'      => $program->id,
+            'payment_plan_id' => $plan->id,
+            'amount'          => 100000,
+            'due_date'        => '2026-06-05',
+            'paid_date'       => '2026-06-03',
+            'status'          => 'paid',
+        ]);
+
+        // Echeance en retard : non payee, date depassee.
+        \App\Models\StudentPayment::create([
+            'student_id'      => $student->id,
+            'program_id'      => $program->id,
+            'payment_plan_id' => $plan->id,
+            'amount'          => 50000,
+            'due_date'        => '2026-06-10',
+            'status'          => 'pending',
+        ]);
+
+        // Echeance hors mois filtre : ne doit pas apparaitre.
+        \App\Models\StudentPayment::create([
+            'student_id'      => $student->id,
+            'program_id'      => $program->id,
+            'payment_plan_id' => $plan->id,
+            'amount'          => 75000,
+            'due_date'        => '2026-07-05',
+            'status'          => 'pending',
+        ]);
+
+        $this->travelTo(\Carbon\Carbon::parse('2026-06-20'));
+
+        $response = $this->actingAs($this->getAdminUser())
+            ->get(route('admin.student-payments.index', ['month' => 6, 'year' => 2026]));
+
+        $response->assertStatus(200);
+        $response->assertSee('Apprenant Attendu');
+        $response->assertViewHas('totalAttendu', 150000.0);
+        $response->assertViewHas('totalRegle', 100000.0);
+        $response->assertViewHas('totalEnRetard', 50000.0);
+        $response->assertViewHas('totalAVenir', 0.0);
+
+        // L'echeance de juillet ne doit pas polluer le total de juin.
+        $paiements = $response->viewData('paiements');
+        $this->assertSame(2, $paiements->total());
+    }
+
+    public function test_admin_can_filter_expected_payments_by_student_name(): void
+    {
+        $program = Program::factory()->create(['name' => 'Programme Paiement Filtre']);
+        $studentA = User::factory()->create(['name' => 'Alice Paiement']);
+        $studentA->assignRole('student');
+        $studentB = User::factory()->create(['name' => 'Bob Paiement']);
+        $studentB->assignRole('student');
+
+        foreach ([$studentA, $studentB] as $student) {
+            \App\Models\StudentPayment::create([
+                'student_id' => $student->id,
+                'program_id' => $program->id,
+                'amount'     => 20000,
+                'due_date'   => '2026-06-15',
+                'status'     => 'pending',
+            ]);
+        }
+
+        $response = $this->actingAs($this->getAdminUser())->get(
+            route('admin.student-payments.index', ['month' => 6, 'year' => 2026, 'search' => 'Alice'])
+        );
+
+        $response->assertStatus(200);
+        $response->assertSee('Alice Paiement');
+        $response->assertDontSee('Bob Paiement');
+    }
 }
