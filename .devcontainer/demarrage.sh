@@ -32,7 +32,12 @@ echo "→ Nettoyage des caches Laravel..."
 php artisan optimize:clear || true
 
 # Un serveur de la session precedente peut encore occuper le port 8000.
+# Tuer « artisan serve » ne suffit pas : le processus enfant « php -S »
+# survit et garde le port 8000, ce qui empeche le nouveau serveur de
+# demarrer tout en continuant de repondre avec une sortie cassee.
 pkill -f "artisan serve" 2>/dev/null || true
+pkill -f "server.php" 2>/dev/null || true
+sleep 1
 
 echo "→ Lancement du serveur applicatif sur le port 8000..."
 nohup php artisan serve --host=0.0.0.0 --port=8000 \
