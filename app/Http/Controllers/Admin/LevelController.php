@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Concerns\ExportsCsv;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 
 use App\Models\Level;
@@ -10,17 +12,45 @@ use App\Models\Program;
 
 class LevelController extends Controller
 {
-    public function index(Request $request)
+    use ExportsCsv;
+
+    /**
+     * Construit la requete des niveaux filtree par les criteres de l'URL,
+     * sans pagination : utilisee telle quelle par l'ecran et par l'export CSV.
+     */
+    private function filtrerNiveaux(Request $request): Builder
     {
         $query = Level::with('program');
-        
+
         if ($request->has('search') && $request->search != '') {
             $search = $request->search;
             $query->where('name', 'like', "%{$search}%");
         }
-        
-        $levels = $query->paginate(15)->appends($request->all());
+
+        return $query;
+    }
+
+    public function index(Request $request)
+    {
+        $levels = $this->filtrerNiveaux($request)->paginate(15)->appends($request->all());
         return view('admin.levels.index', compact('levels'));
+    }
+
+    /**
+     * Export CSV des niveaux correspondant aux filtres actifs.
+     * Meme requete que l'ecran, sans pagination.
+     */
+    public function export(Request $request)
+    {
+        $levels = $this->filtrerNiveaux($request)->get();
+
+        $lignes = $levels->map(fn (Level $level) => [
+            optional($level->program)->name ?? 'Programme supprimé',
+            $level->name,
+            $level->order,
+        ]);
+
+        return $this->streamCsv('niveaux.csv', ['Programme', 'Nom du niveau', 'Ordre'], $lignes);
     }
 
     public function create()

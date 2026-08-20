@@ -22,6 +22,10 @@
             <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                 <div class="p-6 text-gray-900">
                     <x-search-bar placeholder="Rechercher un niveau..." />
+                    <div class="mb-4 flex sm:justify-end">
+                        {{-- Exporte exactement les lignes filtrees affichees a l'ecran. --}}
+                        <a href="{{ route('admin.levels.export', request()->query()) }}" class="text-indigo-600 hover:underline text-sm">Exporter (CSV)</a>
+                    </div>
                     <div class="overflow-x-auto">
                         <table class="w-full text-left border-collapse whitespace-nowrap">
                         <thead>

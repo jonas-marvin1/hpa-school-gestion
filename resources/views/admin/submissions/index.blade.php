@@ -74,6 +74,8 @@
                             @if(request()->hasAny(['search', 'class_id', 'student_id', 'coach_id', 'program_id', 'graded']))
                                 <a href="{{ route('admin.submissions.index') }}" class="inline-flex items-center text-sm text-gray-600 hover:underline">Réinitialiser</a>
                             @endif
+                            {{-- Exporte exactement les lignes filtrees affichees a l'ecran. --}}
+                            <a href="{{ route('admin.submissions.export', request()->query()) }}" class="inline-flex items-center text-sm text-indigo-600 hover:underline">Exporter (CSV)</a>
                         </div>
                     </form>
                 </div>

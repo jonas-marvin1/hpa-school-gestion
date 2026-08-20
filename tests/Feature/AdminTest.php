@@ -145,6 +145,84 @@ class AdminTest extends TestCase
         $response->assertStatus(200);
     }
 
+    public function test_admin_can_export_classes_csv(): void
+    {
+        $program = Program::factory()->create(['name' => 'Programme Export']);
+        $level = Level::factory()->create(['program_id' => $program->id, 'name' => 'Niveau Export']);
+        CourseClass::factory()->create([
+            'level_id' => $level->id,
+            'name' => 'Classe Export',
+            'start_date' => now(),
+            'end_date' => now()->addMonths(3),
+        ]);
+
+        $response = $this->actingAs($this->getAdminUser())->get(route('admin.classes.export'));
+
+        $response->assertStatus(200);
+        $response->assertHeader('Content-Type', 'text/csv; charset=UTF-8');
+        $csv = $response->streamedContent();
+        $this->assertStringContainsString('Classe Export', $csv);
+        $this->assertStringContainsString('Programme Export', $csv);
+    }
+
+    public function test_admin_can_export_programs_csv(): void
+    {
+        Program::factory()->create(['name' => 'Programme CSV', 'description' => 'Une description']);
+
+        $response = $this->actingAs($this->getAdminUser())->get(route('admin.programs.export'));
+
+        $response->assertStatus(200);
+        $csv = $response->streamedContent();
+        $this->assertStringContainsString('Programme CSV', $csv);
+        $this->assertStringContainsString('Une description', $csv);
+    }
+
+    public function test_admin_can_export_levels_csv(): void
+    {
+        $program = Program::factory()->create(['name' => 'Programme Parent']);
+        Level::factory()->create(['program_id' => $program->id, 'name' => 'Niveau CSV', 'order' => 2]);
+
+        $response = $this->actingAs($this->getAdminUser())->get(route('admin.levels.export'));
+
+        $response->assertStatus(200);
+        $csv = $response->streamedContent();
+        $this->assertStringContainsString('Niveau CSV', $csv);
+        $this->assertStringContainsString('Programme Parent', $csv);
+    }
+
+    public function test_admin_can_export_submissions_csv(): void
+    {
+        $coach = User::factory()->create(['name' => 'Coach Devoir']);
+        $coach->assignRole('coach');
+        $student = User::factory()->create(['name' => 'Apprenant Devoir']);
+        $student->assignRole('student');
+
+        $program = Program::factory()->create(['name' => 'Programme Devoir']);
+        $level = Level::factory()->create(['program_id' => $program->id, 'name' => 'Niveau Devoir']);
+        $class = CourseClass::factory()->create(['level_id' => $level->id, 'name' => 'Classe Devoir']);
+
+        $assignment = \App\Models\Assignment::factory()->create([
+            'course_class_id' => $class->id,
+            'coach_id' => $coach->id,
+            'title' => 'Devoir Export',
+            'type' => 'text',
+        ]);
+
+        \App\Models\Submission::factory()->create([
+            'assignment_id' => $assignment->id,
+            'student_id' => $student->id,
+            'content_text' => 'Contenu du rendu',
+        ]);
+
+        $response = $this->actingAs($this->getAdminUser())->get(route('admin.submissions.export'));
+
+        $response->assertStatus(200);
+        $csv = $response->streamedContent();
+        $this->assertStringContainsString('Apprenant Devoir', $csv);
+        $this->assertStringContainsString('Devoir Export', $csv);
+        $this->assertStringContainsString('En attente', $csv);
+    }
+
     public function test_admin_can_create_class(): void
     {
         $program = Program::factory()->create(['name' => 'Test Program']);

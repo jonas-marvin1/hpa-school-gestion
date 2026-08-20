@@ -42,8 +42,13 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->grou
     // route GET users/{user} du resource.
     Route::get('/users/export', [UserController::class, 'export'])->name('users.export');
     Route::resource('users', UserController::class);
+    // Memes declarations "export avant resource" que pour users, sessions et
+    // payments : sinon "export" serait capture par la route GET {id} du resource.
+    Route::get('/programs/export', [ProgramController::class, 'export'])->name('programs.export');
     Route::resource('programs', ProgramController::class);
+    Route::get('/levels/export', [LevelController::class, 'export'])->name('levels.export');
     Route::resource('levels', LevelController::class);
+    Route::get('/classes/export', [CourseClassController::class, 'export'])->name('classes.export');
     Route::resource('classes', CourseClassController::class);
     Route::get('/classes/{class}/assign', [CourseClassController::class, 'assign'])->name('classes.assign.edit');
     Route::post('/classes/{class}/assign', [CourseClassController::class, 'assignUpdate'])->name('classes.assign.update');
@@ -57,6 +62,9 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->grou
     Route::patch('/echeances/{echeance}/payee', [\App\Http\Controllers\Admin\PaymentPlanController::class, 'marquerPayee'])->name('echeances.payee');
 
     Route::get('/submissions', [\App\Http\Controllers\Admin\SubmissionArchiveController::class, 'index'])->name('submissions.index');
+    // Declaree avant /submissions/{submission} : sinon "export" serait
+    // capture comme identifiant de rendu.
+    Route::get('/submissions/export', [\App\Http\Controllers\Admin\SubmissionArchiveController::class, 'export'])->name('submissions.export');
     Route::get('/submissions/{submission}', [\App\Http\Controllers\Admin\SubmissionArchiveController::class, 'show'])->name('submissions.show');
 });
 

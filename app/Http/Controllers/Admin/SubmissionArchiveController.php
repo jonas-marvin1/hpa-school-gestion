@@ -3,10 +3,12 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Concerns\ExportsCsv;
 use App\Models\CourseClass;
 use App\Models\Program;
 use App\Models\Submission;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 
 /**
@@ -17,7 +19,13 @@ use Illuminate\Http\Request;
  */
 class SubmissionArchiveController extends Controller
 {
-    public function index(Request $request)
+    use ExportsCsv;
+
+    /**
+     * Construit la requete des rendus filtree par les criteres de l'URL,
+     * sans pagination : utilisee telle quelle par l'ecran et par l'export CSV.
+     */
+    private function filtrerRendus(Request $request): Builder
     {
         $query = Submission::with([
             'student',
@@ -61,7 +69,12 @@ class SubmissionArchiveController extends Controller
                 : $query->doesntHave('grade');
         }
 
-        $submissions = $query->paginate(20)->appends($request->all());
+        return $query;
+    }
+
+    public function index(Request $request)
+    {
+        $submissions = $this->filtrerRendus($request)->paginate(20)->appends($request->all());
 
         return view('admin.submissions.index', [
             'submissions' => $submissions,
@@ -70,6 +83,26 @@ class SubmissionArchiveController extends Controller
             'students'    => User::role('student')->orderBy('name')->get(),
             'programs'    => Program::orderBy('name')->get(),
         ]);
+    }
+
+    /**
+     * Export CSV des rendus correspondant aux filtres actifs.
+     * Meme requete que l'ecran, sans pagination.
+     */
+    public function export(Request $request)
+    {
+        $submissions = $this->filtrerRendus($request)->get();
+
+        $lignes = $submissions->map(fn (Submission $s) => [
+            $s->created_at->format('d/m/Y H:i'),
+            $s->student->name ?? '—',
+            $s->assignment->title ?? '—',
+            $s->assignment->courseClass->name ?? '—',
+            $s->assignment->coach->name ?? '—',
+            $s->grade ? rtrim(rtrim(number_format($s->grade->score, 1, ',', ''), '0'), ',').'/20' : 'En attente',
+        ]);
+
+        return $this->streamCsv('devoirs_archives.csv', ['Rendu le', 'Apprenant', 'Devoir', 'Classe', 'Formateur', 'Note'], $lignes);
     }
 
     public function show(Submission $submission)

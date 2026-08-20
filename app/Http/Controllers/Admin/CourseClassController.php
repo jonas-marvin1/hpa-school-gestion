@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Concerns\ExportsCsv;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 
 use App\Models\CourseClass;
@@ -10,17 +12,48 @@ use App\Models\Level;
 
 class CourseClassController extends Controller
 {
-    public function index(Request $request)
+    use ExportsCsv;
+
+    /**
+     * Construit la requete des classes filtree par les criteres de l'URL,
+     * sans pagination : utilisee telle quelle par l'ecran et par l'export CSV.
+     */
+    private function filtrerClasses(Request $request): Builder
     {
         $query = CourseClass::with('level.program');
-        
+
         if ($request->has('search') && $request->search != '') {
             $search = $request->search;
             $query->where('name', 'like', "%{$search}%");
         }
-        
-        $classes = $query->paginate(15)->appends($request->all());
+
+        return $query;
+    }
+
+    public function index(Request $request)
+    {
+        $classes = $this->filtrerClasses($request)->paginate(15)->appends($request->all());
         return view('admin.classes.index', compact('classes'));
+    }
+
+    /**
+     * Export CSV des classes correspondant aux filtres actifs.
+     * Meme requete que l'ecran, sans pagination.
+     */
+    public function export(Request $request)
+    {
+        $classes = $this->filtrerClasses($request)->get();
+
+        $lignes = $classes->map(fn (CourseClass $class) => [
+            optional(optional($class->level)->program)->name ?? 'N/A',
+            optional($class->level)->name ?? 'Niveau supprimé',
+            $class->name,
+            $class->location ?? 'Non défini',
+            \Carbon\Carbon::parse($class->start_date)->format('d/m/Y'),
+            \Carbon\Carbon::parse($class->end_date)->format('d/m/Y'),
+        ]);
+
+        return $this->streamCsv('classes.csv', ['Programme', 'Niveau', 'Nom de la classe', 'Lieu', 'Début', 'Fin'], $lignes);
     }
 
     public function create()
