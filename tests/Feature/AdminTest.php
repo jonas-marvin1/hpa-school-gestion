@@ -223,6 +223,53 @@ class AdminTest extends TestCase
         $this->assertStringContainsString('En attente', $csv);
     }
 
+    public function test_admin_can_view_session_quotas(): void
+    {
+        $program = Program::factory()->create(['name' => 'Programme Quota']);
+        $level = Level::factory()->create(['program_id' => $program->id, 'name' => 'Niveau Quota']);
+        CourseClass::factory()->create(['level_id' => $level->id, 'name' => 'Classe Quota']);
+
+        $response = $this->actingAs($this->getAdminUser())->get(route('admin.session-quotas.index', ['year' => 2026, 'month' => 6]));
+
+        $response->assertStatus(200);
+        $response->assertSee('Classe Quota');
+        $response->assertSee('Quota non défini');
+    }
+
+    public function test_admin_can_save_session_quota(): void
+    {
+        $program = Program::factory()->create(['name' => 'Programme Quota']);
+        $level = Level::factory()->create(['program_id' => $program->id, 'name' => 'Niveau Quota']);
+        $class = CourseClass::factory()->create(['level_id' => $level->id, 'name' => 'Classe Quota']);
+
+        $response = $this->actingAs($this->getAdminUser())->post(route('admin.session-quotas.store'), [
+            'course_class_id' => $class->id,
+            'year' => 2026,
+            'month' => 6,
+            'quota' => 8,
+        ]);
+
+        $response->assertRedirect(route('admin.session-quotas.index', ['year' => 2026, 'month' => 6]));
+        $this->assertDatabaseHas('session_quotas', [
+            'course_class_id' => $class->id,
+            'year' => 2026,
+            'month' => 6,
+            'quota' => 8,
+        ]);
+
+        // Une seconde saisie sur le meme couple classe/mois met a jour la
+        // ligne existante plutot que d'en creer une seconde.
+        $this->actingAs($this->getAdminUser())->post(route('admin.session-quotas.store'), [
+            'course_class_id' => $class->id,
+            'year' => 2026,
+            'month' => 6,
+            'quota' => 10,
+        ]);
+
+        $this->assertSame(1, \App\Models\SessionQuota::where('course_class_id', $class->id)->count());
+        $this->assertDatabaseHas('session_quotas', ['course_class_id' => $class->id, 'quota' => 10]);
+    }
+
     public function test_admin_can_create_class(): void
     {
         $program = Program::factory()->create(['name' => 'Test Program']);

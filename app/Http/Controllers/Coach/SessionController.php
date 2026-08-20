@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Coach;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Concerns\GuardsSessionQuota;
 use Illuminate\Http\Request;
 use App\Models\ClassSession;
 use App\Models\CourseClass;
@@ -12,6 +13,8 @@ use Illuminate\Support\Facades\Auth;
 
 class SessionController extends Controller
 {
+    use GuardsSessionQuota;
+
     public function index()
     {
         $sessions = ClassSession::where('coach_id', Auth::id())
@@ -46,6 +49,8 @@ class SessionController extends Controller
         if (!$class->users->contains(Auth::id())) {
             abort(403, 'Vous n\'êtes pas assigné à cette classe.');
         }
+
+        $this->verifierQuotaSession($validated['course_class_id'], $validated['start_time']);
 
         // Create Session
         $session = ClassSession::create([

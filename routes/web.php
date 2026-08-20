@@ -52,6 +52,11 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->grou
     Route::resource('classes', CourseClassController::class);
     Route::get('/classes/{class}/assign', [CourseClassController::class, 'assign'])->name('classes.assign.edit');
     Route::post('/classes/{class}/assign', [CourseClassController::class, 'assignUpdate'])->name('classes.assign.update');
+
+    // Suivi des quotas de sessions par classe et par mois (point 3).
+    Route::get('/quotas-sessions', [\App\Http\Controllers\Admin\SessionQuotaController::class, 'index'])->name('session-quotas.index');
+    Route::post('/quotas-sessions', [\App\Http\Controllers\Admin\SessionQuotaController::class, 'store'])->name('session-quotas.store');
+
     // Onglet « Évaluations » : archive des devoirs rendus, en consultation seule.
     // Les avis des apprenants ne sont plus ici, ils figurent desormais dans le
     // detail de la session, aux cotes du rapport du coach.

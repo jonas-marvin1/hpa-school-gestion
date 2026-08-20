@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Manager;
 
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Concerns\ExportsCsv;
+use App\Http\Controllers\Concerns\GuardsSessionQuota;
 use App\Models\ClassSession;
 use App\Models\CourseClass;
 use App\Models\User;
@@ -13,6 +14,7 @@ use Illuminate\Http\Request;
 class ClassSessionController extends Controller
 {
     use ExportsCsv;
+    use GuardsSessionQuota;
 
     /** Libelles des statuts de session, partages entre l'ecran et l'export CSV. */
     private const STATUTS = [
@@ -118,6 +120,8 @@ class ClassSessionController extends Controller
             'online_link' => 'nullable|url|max:255',
         ]);
 
+        $this->verifierQuotaSession($validated['course_class_id'], $validated['start_time']);
+
         ClassSession::create([
             'course_class_id' => $validated['course_class_id'],
             'coach_id' => $validated['coach_id'],
@@ -155,6 +159,11 @@ class ClassSessionController extends Controller
             'online_link' => 'nullable|url|max:255',
             'status' => 'required|string|in:scheduled,completed,validated,cancelled'
         ]);
+
+        // La session en cours d'edition est exclue du comptage : sinon un
+        // simple changement d'horaire, sans changer de mois, se bloquerait
+        // elle-meme en se comptant deux fois.
+        $this->verifierQuotaSession($validated['course_class_id'], $validated['start_time'], $session->id);
 
         $session->update($validated);
 
