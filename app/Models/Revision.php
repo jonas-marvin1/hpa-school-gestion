@@ -16,11 +16,12 @@ class Revision extends Model
     /** Le journal n'est jamais modifie : seul created_at a un sens. */
     public $timestamps = false;
 
-    protected $fillable = ['revisable_type', 'revisable_id', 'user_id', 'action', 'changes'];
+    protected $fillable = ['revisable_type', 'revisable_id', 'user_id', 'action', 'changes', 'is_correction'];
 
     protected $casts = [
-        'changes'    => 'array',
-        'created_at' => 'datetime',
+        'changes'       => 'array',
+        'created_at'    => 'datetime',
+        'is_correction' => 'boolean',
     ];
 
     public function revisable()
