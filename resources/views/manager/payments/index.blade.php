@@ -1,3 +1,11 @@
+@php
+    // Regler ou supprimer une fiche est reserve a l'administrateur : les
+    // routes correspondantes sont protegees (cf. routes/web.php). On masque
+    // ici les commandes correspondantes pour ne pas proposer au manager des
+    // actions qui se solderaient par un 403.
+    $peutRegler = auth()->user()->hasRole('admin');
+@endphp
+
 <x-app-layout>
     <x-slot name="header">
         <div class="flex justify-between items-center">
@@ -124,6 +132,7 @@
                         </p>
                     </div>
 
+                    @if($peutRegler)
                     {{-- Barre d'action groupee : n'apparait qu'une fois une fiche
                          cochee, pour ne pas encombrer l'ecran le reste du temps. --}}
                     <div x-show="nbSelection > 0" x-cloak
@@ -150,24 +159,29 @@
                             </form>
                         </div>
                     </div>
+                    @endif
 
                     <div class="overflow-x-auto">
                         <table class="w-full text-left border-collapse whitespace-nowrap text-sm">
                         <thead>
                             <tr class="bg-gray-50 text-gray-600">
+                                @if($peutRegler)
                                 <th class="border-b py-3 px-4 w-10">
                                     <input type="checkbox" @change="toutCocher($event.target.checked)"
                                            :checked="toutesCochees" :indeterminate="nbSelection > 0 && !toutesCochees"
                                            class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                                            title="Tout sélectionner (fiches en attente)">
                                 </th>
+                                @endif
                                 <th class="border-b py-3 px-4 font-semibold uppercase tracking-wider">Date</th>
                                 <th class="border-b py-3 px-4 font-semibold uppercase tracking-wider">Horaire</th>
                                 <th class="border-b py-3 px-4 font-semibold uppercase tracking-wider">Classe</th>
                                 <th class="border-b py-3 px-4 font-semibold uppercase tracking-wider">Formateur</th>
                                 <th class="border-b py-3 px-4 font-semibold uppercase tracking-wider text-center">Statut</th>
                                 <th class="border-b py-3 px-4 font-semibold uppercase tracking-wider text-right">Montant</th>
+                                @if($peutRegler)
                                 <th class="border-b py-3 px-4 font-semibold uppercase tracking-wider text-center">Action</th>
+                                @endif
                             </tr>
                         </thead>
                         <tbody>
@@ -176,6 +190,7 @@
                                     $session = $payment->sessions->first();
                                 @endphp
                                 <tr class="hover:bg-gray-50" :class="estSelectionnee({{ $payment->id }}) && 'bg-indigo-50'">
+                                    @if($peutRegler)
                                     <td class="border-b py-3 px-4">
                                         @if($payment->status === 'pending')
                                             {{-- Seules les fiches en attente sont selectionnables :
@@ -187,6 +202,7 @@
                                                    class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
                                         @endif
                                     </td>
+                                    @endif
                                     <td class="border-b py-3 px-4">
                                         {{ $session ? $session->start_time->format('d/m/Y') : str_pad($payment->month, 2, '0', STR_PAD_LEFT).'/'.$payment->year }}
                                     </td>
@@ -217,6 +233,7 @@
                                     <td class="border-b py-3 px-4 text-right font-bold">
                                         {{ number_format($payment->total_amount, 0, ',', ' ') }}
                                     </td>
+                                    @if($peutRegler)
                                     <td class="border-b py-3 px-4 text-center">
                                         <div class="flex flex-wrap justify-center gap-2">
                                             @if($payment->status === 'pending')
@@ -238,10 +255,11 @@
                                             </form>
                                         </div>
                                     </td>
+                                    @endif
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="8" class="py-4 text-center text-gray-500">Aucune fiche de paie trouvée.</td>
+                                    <td colspan="{{ $peutRegler ? 8 : 6 }}" class="py-4 text-center text-gray-500">Aucune fiche de paie trouvée.</td>
                                 </tr>
                             @endforelse
                         </tbody>

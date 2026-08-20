@@ -1,3 +1,11 @@
+@php
+    // Regler ou supprimer une fiche est reserve a l'administrateur : les
+    // routes correspondantes sont protegees (cf. routes/web.php). On masque
+    // ici les commandes correspondantes pour ne pas proposer au manager des
+    // actions qui se solderaient par un 403.
+    $peutRegler = auth()->user()->hasRole('admin');
+@endphp
+
 <x-app-layout>
     <x-slot name="header">
         <div class="flex justify-between items-center">
@@ -5,7 +13,7 @@
                 {{ __('Détails de la Fiche de Paie') }} - {{ str_pad($payment->month, 2, '0', STR_PAD_LEFT) }}/{{ $payment->year }}
             </h2>
             <div class="flex gap-2">
-                @if($payment->status === 'pending')
+                @if($peutRegler && $payment->status === 'pending')
                     <form action="{{ route('manager.payments.update', $payment) }}" method="POST" class="inline">
                         @csrf
                         @method('PUT')

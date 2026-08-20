@@ -64,10 +64,23 @@ Route::middleware(['auth', 'role:manager|admin'])->prefix('manager')->name('mana
     Route::get('/classes/{courseClass}/assign', [CourseClassAssignmentController::class, 'edit'])->name('classes.assign.edit');
     Route::post('/classes/{courseClass}/assign', [CourseClassAssignmentController::class, 'update'])->name('classes.assign.update');
     Route::resource('sessions', ClassSessionController::class);
-    Route::resource('payments', \App\Http\Controllers\Manager\PaymentController::class);
-    Route::post('payments/{payment}/pay', [\App\Http\Controllers\Manager\PaymentController::class, 'markAsPaid'])->name('payments.pay');
-    // Reglement groupe : evite de repeter le meme clic sur chaque ligne.
-    Route::post('payments/pay-many', [\App\Http\Controllers\Manager\PaymentController::class, 'markManyAsPaid'])->name('payments.payMany');
+
+    // Fiches de paie : le manager prepare et consulte, il ne decaisse pas.
+    // La generation reste ouverte, elle ne fait que constituer les fiches a
+    // partir des sessions validees et n'engage aucun paiement.
+    Route::resource('payments', \App\Http\Controllers\Manager\PaymentController::class)
+        ->only(['index', 'create', 'store', 'show']);
+
+    // Reglement et suppression d'une fiche : reserves a l'administrateur.
+    // Marquer « payé » vaut sortie de caisse, et supprimer une fiche remet
+    // ses sessions en non facturees : deux gestes que seul l'admin assume.
+    Route::middleware('role:admin')->group(function () {
+        Route::put('payments/{payment}', [\App\Http\Controllers\Manager\PaymentController::class, 'update'])->name('payments.update');
+        Route::delete('payments/{payment}', [\App\Http\Controllers\Manager\PaymentController::class, 'destroy'])->name('payments.destroy');
+        Route::post('payments/{payment}/pay', [\App\Http\Controllers\Manager\PaymentController::class, 'markAsPaid'])->name('payments.pay');
+        // Reglement groupe : evite de repeter le meme clic sur chaque ligne.
+        Route::post('payments/pay-many', [\App\Http\Controllers\Manager\PaymentController::class, 'markManyAsPaid'])->name('payments.payMany');
+    });
 });
 
 // Coach Routes
