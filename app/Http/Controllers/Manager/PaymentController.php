@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Manager;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Concerns\ExportsCsv;
 use Illuminate\Http\Request;
 use App\Models\Payment;
 use App\Models\ClassSession;
@@ -10,11 +11,27 @@ use App\Models\CourseClass;
 use App\Models\User;
 use App\Services\AnneesDisponibles;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 
 class PaymentController extends Controller
 {
-    public function index(Request $request)
+    use ExportsCsv;
+
+    /** Libelles des statuts de fiche, partages entre l'ecran et l'export CSV. */
+    private const STATUTS = [
+        'paid'      => 'Payé',
+        'validated' => 'Payé',
+        'cancelled' => 'Annulé',
+        'pending'   => 'En attente',
+    ];
+
+    /**
+     * Construit la requete des fiches de paie filtree par les criteres de
+     * l'URL, sans pagination : utilisee telle quelle par l'ecran et par
+     * l'export CSV.
+     */
+    private function filtrerPaiements(Request $request): Builder
     {
         $query = Payment::with(['coach', 'validator', 'sessions.courseClass'])->orderBy('created_at', 'desc');
         if ($request->has('search_coach') && $request->search_coach != '') {
@@ -23,7 +40,7 @@ class PaymentController extends Controller
                 $q->where('name', 'like', "%{$search}%");
             });
         }
-        
+
         if ($request->has('coach_id') && $request->coach_id != '') {
             $query->where('coach_id', $request->coach_id);
         }
@@ -46,8 +63,13 @@ class PaymentController extends Controller
                 $q->where('course_class_id', $classId);
             });
         }
-        
-        $payments = $query->paginate(15)->appends($request->all());
+
+        return $query;
+    }
+
+    public function index(Request $request)
+    {
+        $payments = $this->filtrerPaiements($request)->paginate(15)->appends($request->all());
 
         // Calculate Total à payer (only 'pending' payments)
         $totalToPayQuery = Payment::where('status', 'pending');
@@ -87,6 +109,30 @@ class PaymentController extends Controller
         $years = AnneesDisponibles::depuisColonneAnnee(Payment::query());
 
         return view('manager.payments.index', compact('payments', 'totalToPay', 'coaches', 'classes', 'years'));
+    }
+
+    /**
+     * Export CSV des fiches de paie correspondant aux filtres actifs.
+     * Meme requete que l'ecran, sans pagination.
+     */
+    public function export(Request $request)
+    {
+        $payments = $this->filtrerPaiements($request)->get();
+
+        $lignes = $payments->map(function (Payment $payment) {
+            $session = $payment->sessions->first();
+
+            return [
+                $session ? $session->start_time->format('d/m/Y') : str_pad((string) $payment->month, 2, '0', STR_PAD_LEFT).'/'.$payment->year,
+                $session ? $session->start_time->format('H:i').' - '.$session->end_time->format('H:i') : '-',
+                $session && $session->courseClass ? $session->courseClass->name : 'N/A',
+                $payment->coach->name ?? 'Inconnu',
+                self::STATUTS[$payment->status] ?? $payment->status,
+                number_format((float) $payment->total_amount, 2, ',', ''),
+            ];
+        });
+
+        return $this->streamCsv('fiches_de_paie.csv', ['Date', 'Horaire', 'Classe', 'Formateur', 'Statut', 'Montant'], $lignes);
     }
 
     public function create()

@@ -120,6 +120,25 @@ class AdminTest extends TestCase
         $this->assertDatabaseHas('levels', ['name' => 'Level 1', 'program_id' => $program->id]);
     }
 
+    public function test_admin_can_export_users_csv(): void
+    {
+        $coach = User::factory()->create(['name' => 'Alice Export', 'email' => 'alice.export@example.com']);
+        $coach->assignRole('coach');
+        $student = User::factory()->create(['name' => 'Bob Autre', 'email' => 'bob.autre@example.com']);
+        $student->assignRole('student');
+
+        // Le filtre par role doit s'appliquer a l'export comme a l'ecran.
+        $response = $this->actingAs($this->getAdminUser())->get(route('admin.users.export', ['role' => 'coach']));
+
+        $response->assertStatus(200);
+        $response->assertHeader('Content-Type', 'text/csv; charset=UTF-8');
+
+        $csv = $response->streamedContent();
+        $this->assertStringContainsString('Alice Export', $csv);
+        $this->assertStringContainsString('alice.export@example.com', $csv);
+        $this->assertStringNotContainsString('Bob Autre', $csv);
+    }
+
     public function test_admin_can_view_classes(): void
     {
         $response = $this->actingAs($this->getAdminUser())->get(route('admin.classes.index'));

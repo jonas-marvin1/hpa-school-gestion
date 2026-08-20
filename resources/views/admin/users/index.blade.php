@@ -90,6 +90,8 @@
                             @if(request()->hasAny(['search', 'role', 'status', 'periode', 'du', 'au']))
                                 <a href="{{ route('admin.users.index') }}" class="ml-2 text-gray-600 hover:underline text-sm">Réinitialiser</a>
                             @endif
+                            {{-- Exporte exactement les lignes filtrees affichees a l'ecran. --}}
+                            <a href="{{ route('admin.users.export', request()->query()) }}" class="ml-2 text-indigo-600 hover:underline text-sm">Exporter (CSV)</a>
                         </div>
                     </form>
 

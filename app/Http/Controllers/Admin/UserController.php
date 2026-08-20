@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Concerns\ExportsCsv;
 use Illuminate\Http\Request;
+use Illuminate\Database\Eloquent\Builder;
 
 use App\Models\User;
 use Spatie\Permission\Models\Role;
@@ -13,6 +15,8 @@ use Carbon\Carbon;
 
 class UserController extends Controller
 {
+    use ExportsCsv;
+
     /**
      * Periodes de creation proposees dans le filtre.
      *
@@ -36,7 +40,12 @@ class UserController extends Controller
         'annee' => 'Par année',
     ];
 
-    public function index(Request $request)
+    /**
+     * Construit la requete des utilisateurs filtree par les criteres de
+     * l'URL, sans tri ni pagination : utilisee telle quelle par l'ecran et
+     * par l'export CSV, pour que les deux affichent toujours les memes lignes.
+     */
+    private function filtrerUtilisateurs(Request $request): Builder
     {
         $query = User::with('roles');
 
@@ -74,6 +83,17 @@ class UserController extends Controller
             $query->where('created_at', '<=', $fin);
         }
 
+        return $query;
+    }
+
+    public function index(Request $request)
+    {
+        $query = $this->filtrerUtilisateurs($request);
+
+        $periode = array_key_exists($request->input('periode'), self::PERIODES)
+            ? $request->input('periode')
+            : null;
+
         // Les comptes les plus recents en tete : c'est l'information la plus
         // souvent recherchee quand on ouvre cette page.
         $tri = $request->input('tri') === 'ancien' ? 'ancien' : 'recent';
@@ -106,6 +126,29 @@ class UserController extends Controller
             'repartition'   => $repartition,
             'sansDate'      => $sansDate,
         ]);
+    }
+
+    /**
+     * Export CSV des utilisateurs correspondant aux filtres actifs.
+     * Meme requete que l'ecran, sans pagination.
+     */
+    public function export(Request $request)
+    {
+        $tri = $request->input('tri') === 'ancien' ? 'ancien' : 'recent';
+
+        $users = $this->filtrerUtilisateurs($request)
+            ->orderBy('created_at', $tri === 'ancien' ? 'asc' : 'desc')
+            ->get();
+
+        $lignes = $users->map(fn (User $user) => [
+            $user->name,
+            $user->email,
+            $user->roles->pluck('name')->first() ?? 'Sans rôle',
+            $user->status === 'active' ? 'Actif' : 'Inactif',
+            $user->created_at?->format('d/m/Y H:i') ?? '',
+        ]);
+
+        return $this->streamCsv('utilisateurs.csv', ['Nom', 'Email', 'Rôle', 'Statut', 'Date de création'], $lignes);
     }
 
     /**

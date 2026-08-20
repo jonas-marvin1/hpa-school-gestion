@@ -109,6 +109,8 @@
                         <div class="flex items-end space-x-2">
                             <button type="submit" class="w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">Filtrer</button>
                             <a href="{{ route('manager.payments.index') }}" class="w-full bg-gray-200 text-gray-800 px-4 py-2 rounded-md text-center hover:bg-gray-300">Réinitialiser</a>
+                            {{-- Exporte exactement les lignes filtrees affichees a l'ecran. --}}
+                            <a href="{{ route('manager.payments.export', request()->query()) }}" class="w-full bg-gray-200 text-gray-800 px-4 py-2 rounded-md text-center hover:bg-gray-300">Exporter (CSV)</a>
                         </div>
                     </form>
                 </div>

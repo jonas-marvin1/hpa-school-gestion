@@ -54,6 +54,10 @@
                             <a href="{{ route('manager.sessions.index') }}" class="bg-gray-200 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-300 font-medium text-sm w-full md:w-auto text-center">
                                 Réinitialiser
                             </a>
+                            {{-- Exporte exactement les lignes filtrees affichees a l'ecran. --}}
+                            <a href="{{ route('manager.sessions.export', request()->query()) }}" class="bg-gray-200 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-300 font-medium text-sm w-full md:w-auto text-center">
+                                Exporter (CSV)
+                            </a>
                         </div>
                     </form>
 

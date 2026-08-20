@@ -38,6 +38,9 @@ Route::middleware('auth')->group(function () {
 // Admin Routes
 Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    // Declaree avant le resource : sinon "export" serait capture par la
+    // route GET users/{user} du resource.
+    Route::get('/users/export', [UserController::class, 'export'])->name('users.export');
     Route::resource('users', UserController::class);
     Route::resource('programs', ProgramController::class);
     Route::resource('levels', LevelController::class);
@@ -63,11 +66,17 @@ Route::middleware(['auth', 'role:manager|admin'])->prefix('manager')->name('mana
     Route::get('/classes', [CourseClassAssignmentController::class, 'index'])->name('classes.index');
     Route::get('/classes/{courseClass}/assign', [CourseClassAssignmentController::class, 'edit'])->name('classes.assign.edit');
     Route::post('/classes/{courseClass}/assign', [CourseClassAssignmentController::class, 'update'])->name('classes.assign.update');
+    // Declaree avant le resource : sinon "export" serait capture par la
+    // route GET sessions/{session} du resource.
+    Route::get('/sessions/export', [ClassSessionController::class, 'export'])->name('sessions.export');
     Route::resource('sessions', ClassSessionController::class);
 
     // Fiches de paie : le manager prepare et consulte, il ne decaisse pas.
     // La generation reste ouverte, elle ne fait que constituer les fiches a
     // partir des sessions validees et n'engage aucun paiement.
+    // Declaree avant le resource : sinon "export" serait capture par la
+    // route GET payments/{payment} du resource.
+    Route::get('/payments/export', [\App\Http\Controllers\Manager\PaymentController::class, 'export'])->name('payments.export');
     Route::resource('payments', \App\Http\Controllers\Manager\PaymentController::class)
         ->only(['index', 'create', 'store', 'show']);
 

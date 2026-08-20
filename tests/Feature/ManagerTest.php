@@ -78,6 +78,58 @@ class ManagerTest extends TestCase
         $response->assertStatus(200);
     }
 
+    public function test_manager_can_export_sessions_csv(): void
+    {
+        $program = \App\Models\Program::factory()->create(['name' => 'Test Prog']);
+        $level = \App\Models\Level::factory()->create(['program_id' => $program->id, 'name' => 'Test Level']);
+        $class = CourseClass::factory()->create(['level_id' => $level->id, 'name' => 'Classe Export']);
+        $coach = User::factory()->create(['name' => 'Coach Export']);
+        $coach->assignRole('coach');
+
+        ClassSession::factory()->create([
+            'course_class_id' => $class->id,
+            'coach_id' => $coach->id,
+            'start_time' => now(),
+            'end_time' => now()->addHours(2),
+            'status' => 'scheduled',
+            'intervention_type' => 'in_person',
+            'amount' => 100,
+        ]);
+
+        $response = $this->actingAs($this->getManagerUser())->get(route('manager.sessions.export'));
+
+        $response->assertStatus(200);
+        $response->assertHeader('Content-Type', 'text/csv; charset=UTF-8');
+
+        $csv = $response->streamedContent();
+        $this->assertStringContainsString('Classe Export', $csv);
+        $this->assertStringContainsString('Coach Export', $csv);
+    }
+
+    public function test_manager_can_export_payments_csv(): void
+    {
+        $coach = User::factory()->create(['name' => 'Coach Paie']);
+        $coach->assignRole('coach');
+
+        Payment::factory()->create([
+            'coach_id' => $coach->id,
+            'month' => now()->month,
+            'year' => now()->year,
+            'total_sessions' => 1,
+            'total_amount' => 500,
+            'status' => 'pending',
+        ]);
+
+        $response = $this->actingAs($this->getManagerUser())->get(route('manager.payments.export'));
+
+        $response->assertStatus(200);
+        $response->assertHeader('Content-Type', 'text/csv; charset=UTF-8');
+
+        $csv = $response->streamedContent();
+        $this->assertStringContainsString('Coach Paie', $csv);
+        $this->assertStringContainsString('500,00', $csv);
+    }
+
     public function test_manager_can_create_payment(): void
     {
         $coach = User::factory()->create();
