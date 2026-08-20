@@ -8,6 +8,7 @@ use App\Models\Payment;
 use App\Models\ClassSession;
 use App\Models\CourseClass;
 use App\Models\User;
+use App\Services\AnneesDisponibles;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 
@@ -79,20 +80,11 @@ class PaymentController extends Controller
         $coaches = User::role('coach')->get();
         $classes = CourseClass::orderBy('name')->get();
 
-        // Annees proposees par le filtre. Elles sont deduites des fiches
-        // existantes plutot que d'une fenetre glissante autour de l'annee
-        // courante : aucune annee ayant des donnees ne peut ainsi manquer,
-        // et il n'y a plus rien a modifier dans le code chaque annee.
-        $years = Payment::query()
-            ->select('year')
-            ->distinct()
-            ->whereNotNull('year')
-            ->orderByDesc('year')
-            ->pluck('year')
-            ->push(now()->year)   // l'annee en cours reste proposee meme sans fiche
-            ->unique()
-            ->sortDesc()
-            ->values();
+        // Annees proposees par le filtre : celles des fiches existantes,
+        // l'annee en cours et les annees a venir. La construction est
+        // centralisee dans AnneesDisponibles, qui alimente de la meme facon
+        // tous les filtres par annee de l'application.
+        $years = AnneesDisponibles::depuisColonneAnnee(Payment::query());
 
         return view('manager.payments.index', compact('payments', 'totalToPay', 'coaches', 'classes', 'years'));
     }
