@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Payment;
 use App\Models\ClassSession;
+use App\Models\CourseClass;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -37,6 +38,13 @@ class PaymentController extends Controller
         if ($request->has('year') && $request->year != '') {
             $query->where('year', $request->year);
         }
+
+        if ($request->has('class_id') && $request->class_id != '') {
+            $classId = $request->class_id;
+            $query->whereHas('sessions', function($q) use ($classId) {
+                $q->where('course_class_id', $classId);
+            });
+        }
         
         $payments = $query->paginate(15)->appends($request->all());
 
@@ -59,10 +67,17 @@ class PaymentController extends Controller
         if ($request->has('year') && $request->year != '') {
             $totalToPayQuery->where('year', $request->year);
         }
+        if ($request->has('class_id') && $request->class_id != '') {
+            $classId = $request->class_id;
+            $totalToPayQuery->whereHas('sessions', function($q) use ($classId) {
+                $q->where('course_class_id', $classId);
+            });
+        }
         
         $totalToPay = $totalToPayQuery->sum('total_amount');
         
         $coaches = User::role('coach')->get();
+        $classes = CourseClass::orderBy('name')->get();
 
         // Annees proposees par le filtre. Elles sont deduites des fiches
         // existantes plutot que d'une fenetre glissante autour de l'annee
@@ -79,7 +94,7 @@ class PaymentController extends Controller
             ->sortDesc()
             ->values();
 
-        return view('manager.payments.index', compact('payments', 'totalToPay', 'coaches', 'years'));
+        return view('manager.payments.index', compact('payments', 'totalToPay', 'coaches', 'classes', 'years'));
     }
 
     public function create()

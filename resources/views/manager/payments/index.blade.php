@@ -42,7 +42,7 @@
             <!-- Advanced Search Filters -->
             <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg mb-6">
                 <div class="p-6 text-gray-900">
-                    <form method="GET" action="{{ route('manager.payments.index') }}" class="grid grid-cols-1 md:grid-cols-6 gap-4">
+                    <form method="GET" action="{{ route('manager.payments.index') }}" class="grid grid-cols-1 md:grid-cols-7 gap-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700">Recherche (Nom)</label>
                             <input type="text" name="search_coach" value="{{ request('search_coach') }}" placeholder="Rechercher formateur..." class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
@@ -54,6 +54,17 @@
                                 @foreach($coaches as $coach)
                                     <option value="{{ $coach->id }}" {{ request('coach_id') == $coach->id ? 'selected' : '' }}>
                                         {{ $coach->name }}
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Classe</label>
+                            <select name="class_id" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
+                                <option value="">Toutes les classes</option>
+                                @foreach($classes as $classe)
+                                    <option value="{{ $classe->id }}" {{ request('class_id') == $classe->id ? 'selected' : '' }}>
+                                        {{ $classe->name }}
                                     </option>
                                 @endforeach
                             </select>
@@ -104,7 +115,7 @@
                         <p class="text-sm text-gray-600">
                             <span class="font-semibold text-gray-900">{{ $payments->total() }}</span>
                             fiche{{ $payments->total() > 1 ? 's' : '' }}
-                            @if(request()->hasAny(['search_coach', 'coach_id', 'status', 'month', 'year']))
+                            @if(request()->hasAny(['search_coach', 'coach_id', 'class_id', 'status', 'month', 'year']))
                                 <span class="text-gray-500">pour ce filtre</span>
                             @endif
                             @if($payments->hasPages())
@@ -248,8 +259,6 @@
     <script>
         function selectionFiches() {
             return {
-                // Map id -> montant : permet d'afficher le total selectionne
-                // sans relire le tableau a chaque changement.
                 selection: [],
                 montants: {},
 
@@ -263,8 +272,6 @@
                     return new Intl.NumberFormat('fr-FR').format(Math.round(this.montantTotal));
                 },
 
-                // Ne compte que les fiches en attente : les lignes deja reglees
-                // n'ont pas de case a cocher.
                 get cochables() {
                     return Array.from(this.$el.querySelectorAll('[data-fiche]'));
                 },
