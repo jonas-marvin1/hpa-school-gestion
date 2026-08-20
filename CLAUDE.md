@@ -10,7 +10,7 @@ projet à chaque session.
 - Blade + Tailwind CSS 3 + Alpine.js (pas de framework front séparé)
 - Spatie Laravel Permission pour les rôles
 - MariaDB en développement, MySQL en production (hébergement mutualisé)
-- PHPUnit — 63 tests, à garder au vert
+- PHPUnit — 76 tests, à garder au vert
 
 ## Rôles applicatifs
 
@@ -86,26 +86,6 @@ nouveaux développements mêlés).
 `app/Services/AnneesDisponibles.php` construit les listes d'années des
 filtres : années présentes en base, plus l'année en cours, plus l'année
 suivante. Tout nouveau filtre par année doit l'utiliser.
-
-## État de la fiche du 13/08/2026
-
-Traités et commités :
-- point 8 — filtre par classe dans les fiches de paie
-- point 7 — règlement des fiches réservé à l'admin
-- point 9 — date de création et filtres par période sur les utilisateurs
-- point 1 — prise en compte des années futures dans tous les filtres
-
-Restants :
-- **point 2** — export CSV des données filtrées (planning, utilisateurs,
-  paiements, et tout tableau filtrable du Back Office Admin)
-- **point 3** — contrôle du nombre de sessions par classe et par mois, avec
-  alerte en cas de dépassement du quota défini par l'admin
-- **point 4** — correction du niveau initial et de l'historique de
-  progression, la valeur erronée ne devant plus apparaître dans l'interface
-- **point 5** — modification par l'apprenant de ses informations
-  personnelles, mot de passe et photo, sauf son nom d'utilisateur
-- **point 6** — vue globale des paiements attendus chaque mois, avec vision
-  prévisionnelle et non plus seulement les échéances du jour et les retards
 
 ## Dette technique connue
 
