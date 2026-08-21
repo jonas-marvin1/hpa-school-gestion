@@ -1,0 +1,23 @@
+# Racine de l'application Laravel : rien ne doit etre servi depuis ce niveau.
+#
+# Seul le dossier public/ est destine au web. Or l'application est installee
+# sous public_html, donc toute son arborescence est atteignable par URL. Sans
+# ce fichier, /my/app/.env est telecharge comme un fichier statique : il
+# contient le mot de passe de la base et APP_KEY, la cle qui signe les
+# sessions. Quiconque la recupere peut forger la session d'un administrateur.
+#
+# Le dossier public/ retablit l'acces avec son propre .htaccess : une regle
+# posee dans un sous-dossier l'emporte sur celle du dossier parent.
+#
+# Ce fichier est un garde-fou, pas la solution definitive : la bonne
+# configuration est de faire pointer la racine du sous-domaine directement
+# sur my/app/public.
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+</IfModule>
+# Pas de listing, meme si la directive ci-dessus venait a etre ignoree.
+Options -Indexes
