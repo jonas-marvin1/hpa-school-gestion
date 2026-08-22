@@ -3,23 +3,52 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Concerns\ExportsCsv;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 
 use App\Models\Program;
 
 class ProgramController extends Controller
 {
-    public function index(Request $request)
+    use ExportsCsv;
+
+    /**
+     * Construit la requete des programmes filtree par les criteres de l'URL,
+     * sans pagination : utilisee telle quelle par l'ecran et par l'export CSV.
+     */
+    private function filtrerProgrammes(Request $request): Builder
     {
         $query = Program::query();
-        
+
         if ($request->has('search') && $request->search != '') {
             $search = $request->search;
             $query->where('name', 'like', "%{$search}%");
         }
-        
-        $programs = $query->paginate(15)->appends($request->all());
+
+        return $query;
+    }
+
+    public function index(Request $request)
+    {
+        $programs = $this->filtrerProgrammes($request)->paginate(15)->appends($request->all());
         return view('admin.programs.index', compact('programs'));
+    }
+
+    /**
+     * Export CSV des programmes correspondant aux filtres actifs.
+     * Meme requete que l'ecran, sans pagination.
+     */
+    public function export(Request $request)
+    {
+        $programs = $this->filtrerProgrammes($request)->get();
+
+        $lignes = $programs->map(fn (Program $program) => [
+            $program->name,
+            $program->description ?? '',
+        ]);
+
+        return $this->streamCsv('programmes.csv', ['Nom', 'Description'], $lignes);
     }
 
     public function create()

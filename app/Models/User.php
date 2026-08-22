@@ -75,9 +75,14 @@ class User extends Authenticatable
      * l'administrateur qui la decide. Le changement est journalise par le
      * trait RecordsRevisions, ce qui donne l'historique de progression sans
      * table supplementaire.
+     *
+     * $correction signale que ce changement rattrape une erreur de saisie
+     * (et non une progression legitime) : les etapes anterieures a cette
+     * ligne disparaissent alors de l'historique affiche.
      */
-    public function changerNiveau(EnglishLevel $niveau): void
+    public function changerNiveau(EnglishLevel $niveau, bool $correction = false): void
     {
+        $this->revisionEstCorrection = $correction;
         $this->english_level_id = $niveau->id;
         $this->save();
     }

@@ -22,7 +22,9 @@
                                 'admin.users.*',
                                 'admin.programs.*',
                                 'admin.levels.*',
-                                'admin.classes.*'
+                                'admin.classes.*',
+                                'admin.session-quotas.*',
+                                'admin.student-payments.*'
                             ]);
                         @endphp
                         <x-dropdown align="left" width="48">
@@ -46,6 +48,12 @@
                                 </x-dropdown-link>
                                 <x-dropdown-link :href="route('admin.classes.index')" class="{{ request()->routeIs('admin.classes.*') ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400 font-medium' : '' }}">
                                     {{ __('Classes') }}
+                                </x-dropdown-link>
+                                <x-dropdown-link :href="route('admin.session-quotas.index')" class="{{ request()->routeIs('admin.session-quotas.*') ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400 font-medium' : '' }}">
+                                    {{ __('Quotas de sessions') }}
+                                </x-dropdown-link>
+                                <x-dropdown-link :href="route('admin.student-payments.index')" class="{{ request()->routeIs('admin.student-payments.*') ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400 font-medium' : '' }}">
+                                    {{ __('Paiements attendus') }}
                                 </x-dropdown-link>
                             </x-slot>
                         </x-dropdown>
@@ -255,6 +263,12 @@
                 </x-responsive-nav-link>
                 <x-responsive-nav-link :href="route('admin.classes.index')" :active="request()->routeIs('admin.classes.*')">
                     {{ __('Classes') }}
+                </x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('admin.session-quotas.index')" :active="request()->routeIs('admin.session-quotas.*')">
+                    {{ __('Quotas de sessions') }}
+                </x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('admin.student-payments.index')" :active="request()->routeIs('admin.student-payments.*')">
+                    {{ __('Paiements attendus') }}
                 </x-responsive-nav-link>
                 <x-responsive-nav-link :href="route('manager.sessions.index')" :active="request()->routeIs('manager.sessions.*')">
                     {{ __('Planning') }}

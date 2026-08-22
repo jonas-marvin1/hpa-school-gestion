@@ -21,9 +21,10 @@ class StudentLevelController extends Controller
         $this->garantirApprenant($student);
 
         return view('levels.edit', [
-            'student'   => $student,
-            'echelle'   => EnglishLevel::echelle(),
+            'student'    => $student,
+            'echelle'    => EnglishLevel::echelle(),
             'historique' => $this->historiqueNiveau($student),
+            'peutCorriger' => Auth::user()->hasRole('admin'),
         ]);
     }
 
@@ -33,6 +34,7 @@ class StudentLevelController extends Controller
 
         $valide = $request->validate([
             'english_level_id' => 'required|exists:english_levels,id',
+            'correction'       => 'sometimes|boolean',
         ]);
 
         $ancien = $student->englishLevel;
@@ -42,11 +44,17 @@ class StudentLevelController extends Controller
             return back()->with('status', 'Ce niveau est déjà celui de l\'apprenant.');
         }
 
-        $student->changerNiveau($nouveau);
+        // Seul l'admin peut marquer une correction : un coach qui forgerait
+        // le champ ne doit pas pouvoir effacer une etape de l'historique.
+        $correction = $request->boolean('correction') && Auth::user()->hasRole('admin');
 
-        $message = $ancien
-            ? "Niveau modifié : {$ancien->code} → {$nouveau->code}."
-            : "Niveau initial attribué : {$nouveau->code}.";
+        $student->changerNiveau($nouveau, $correction);
+
+        $message = $correction
+            ? "Niveau corrigé : {$nouveau->code}. L'ancienne valeur ne figure plus dans l'historique."
+            : ($ancien
+                ? "Niveau modifié : {$ancien->code} → {$nouveau->code}."
+                : "Niveau initial attribué : {$nouveau->code}.");
 
         return redirect()
             ->route('students.level.edit', $student)
@@ -62,28 +70,44 @@ class StudentLevelController extends Controller
     /**
      * Historique de progression, extrait du journal des modifications.
      * Seules les lignes touchant le niveau sont retenues.
+     *
+     * Une correction efface les etapes anterieures : le niveau errone
+     * qu'elle remplace ne doit plus apparaitre comme une progression valide
+     * (point 4 de la fiche). La liste etant du plus recent au plus ancien,
+     * on s'arrete a la premiere correction rencontree et on ignore tout ce
+     * qui la precede.
      */
     private function historiqueNiveau(User $student)
     {
         $codes = EnglishLevel::pluck('code', 'id');
 
-        return Revision::where('revisable_type', User::class)
+        $entrees = Revision::where('revisable_type', User::class)
             ->where('revisable_id', $student->id)
             ->where('action', 'updated')
             ->with('user')
             ->latest('created_at')
             ->get()
             ->filter(fn ($r) => isset($r->changes['english_level_id']))
-            ->map(function ($r) use ($codes) {
-                $c = $r->changes['english_level_id'];
-
-                return (object) [
-                    'date'   => $r->created_at,
-                    'auteur' => $r->user->name ?? 'traitement automatique',
-                    'avant'  => $codes[$c['before']] ?? null,
-                    'apres'  => $codes[$c['after']] ?? null,
-                ];
-            })
             ->values();
+
+        $indexCorrection = $entrees->search(fn ($r) => $r->is_correction);
+
+        if ($indexCorrection !== false) {
+            $entrees = $entrees->slice(0, $indexCorrection + 1)->values();
+        }
+
+        return $entrees->map(function ($r) use ($codes) {
+            $c = $r->changes['english_level_id'];
+
+            return (object) [
+                'date'       => $r->created_at,
+                'auteur'     => $r->user->name ?? 'traitement automatique',
+                // Une correction masque son propre "avant" : c'est justement
+                // la valeur erronee qui ne doit plus apparaitre.
+                'avant'      => $r->is_correction ? null : ($codes[$c['before']] ?? null),
+                'apres'      => $codes[$c['after']] ?? null,
+                'correction' => $r->is_correction,
+            ];
+        });
     }
 }

@@ -120,10 +120,154 @@ class AdminTest extends TestCase
         $this->assertDatabaseHas('levels', ['name' => 'Level 1', 'program_id' => $program->id]);
     }
 
+    public function test_admin_can_export_users_csv(): void
+    {
+        $coach = User::factory()->create(['name' => 'Alice Export', 'email' => 'alice.export@example.com']);
+        $coach->assignRole('coach');
+        $student = User::factory()->create(['name' => 'Bob Autre', 'email' => 'bob.autre@example.com']);
+        $student->assignRole('student');
+
+        // Le filtre par role doit s'appliquer a l'export comme a l'ecran.
+        $response = $this->actingAs($this->getAdminUser())->get(route('admin.users.export', ['role' => 'coach']));
+
+        $response->assertStatus(200);
+        $response->assertHeader('Content-Type', 'text/csv; charset=UTF-8');
+
+        $csv = $response->streamedContent();
+        $this->assertStringContainsString('Alice Export', $csv);
+        $this->assertStringContainsString('alice.export@example.com', $csv);
+        $this->assertStringNotContainsString('Bob Autre', $csv);
+    }
+
     public function test_admin_can_view_classes(): void
     {
         $response = $this->actingAs($this->getAdminUser())->get(route('admin.classes.index'));
         $response->assertStatus(200);
+    }
+
+    public function test_admin_can_export_classes_csv(): void
+    {
+        $program = Program::factory()->create(['name' => 'Programme Export']);
+        $level = Level::factory()->create(['program_id' => $program->id, 'name' => 'Niveau Export']);
+        CourseClass::factory()->create([
+            'level_id' => $level->id,
+            'name' => 'Classe Export',
+            'start_date' => now(),
+            'end_date' => now()->addMonths(3),
+        ]);
+
+        $response = $this->actingAs($this->getAdminUser())->get(route('admin.classes.export'));
+
+        $response->assertStatus(200);
+        $response->assertHeader('Content-Type', 'text/csv; charset=UTF-8');
+        $csv = $response->streamedContent();
+        $this->assertStringContainsString('Classe Export', $csv);
+        $this->assertStringContainsString('Programme Export', $csv);
+    }
+
+    public function test_admin_can_export_programs_csv(): void
+    {
+        Program::factory()->create(['name' => 'Programme CSV', 'description' => 'Une description']);
+
+        $response = $this->actingAs($this->getAdminUser())->get(route('admin.programs.export'));
+
+        $response->assertStatus(200);
+        $csv = $response->streamedContent();
+        $this->assertStringContainsString('Programme CSV', $csv);
+        $this->assertStringContainsString('Une description', $csv);
+    }
+
+    public function test_admin_can_export_levels_csv(): void
+    {
+        $program = Program::factory()->create(['name' => 'Programme Parent']);
+        Level::factory()->create(['program_id' => $program->id, 'name' => 'Niveau CSV', 'order' => 2]);
+
+        $response = $this->actingAs($this->getAdminUser())->get(route('admin.levels.export'));
+
+        $response->assertStatus(200);
+        $csv = $response->streamedContent();
+        $this->assertStringContainsString('Niveau CSV', $csv);
+        $this->assertStringContainsString('Programme Parent', $csv);
+    }
+
+    public function test_admin_can_export_submissions_csv(): void
+    {
+        $coach = User::factory()->create(['name' => 'Coach Devoir']);
+        $coach->assignRole('coach');
+        $student = User::factory()->create(['name' => 'Apprenant Devoir']);
+        $student->assignRole('student');
+
+        $program = Program::factory()->create(['name' => 'Programme Devoir']);
+        $level = Level::factory()->create(['program_id' => $program->id, 'name' => 'Niveau Devoir']);
+        $class = CourseClass::factory()->create(['level_id' => $level->id, 'name' => 'Classe Devoir']);
+
+        $assignment = \App\Models\Assignment::factory()->create([
+            'course_class_id' => $class->id,
+            'coach_id' => $coach->id,
+            'title' => 'Devoir Export',
+            'type' => 'text',
+        ]);
+
+        \App\Models\Submission::factory()->create([
+            'assignment_id' => $assignment->id,
+            'student_id' => $student->id,
+            'content_text' => 'Contenu du rendu',
+        ]);
+
+        $response = $this->actingAs($this->getAdminUser())->get(route('admin.submissions.export'));
+
+        $response->assertStatus(200);
+        $csv = $response->streamedContent();
+        $this->assertStringContainsString('Apprenant Devoir', $csv);
+        $this->assertStringContainsString('Devoir Export', $csv);
+        $this->assertStringContainsString('En attente', $csv);
+    }
+
+    public function test_admin_can_view_session_quotas(): void
+    {
+        $program = Program::factory()->create(['name' => 'Programme Quota']);
+        $level = Level::factory()->create(['program_id' => $program->id, 'name' => 'Niveau Quota']);
+        CourseClass::factory()->create(['level_id' => $level->id, 'name' => 'Classe Quota']);
+
+        $response = $this->actingAs($this->getAdminUser())->get(route('admin.session-quotas.index', ['year' => 2026, 'month' => 6]));
+
+        $response->assertStatus(200);
+        $response->assertSee('Classe Quota');
+        $response->assertSee('Quota non défini');
+    }
+
+    public function test_admin_can_save_session_quota(): void
+    {
+        $program = Program::factory()->create(['name' => 'Programme Quota']);
+        $level = Level::factory()->create(['program_id' => $program->id, 'name' => 'Niveau Quota']);
+        $class = CourseClass::factory()->create(['level_id' => $level->id, 'name' => 'Classe Quota']);
+
+        $response = $this->actingAs($this->getAdminUser())->post(route('admin.session-quotas.store'), [
+            'course_class_id' => $class->id,
+            'year' => 2026,
+            'month' => 6,
+            'quota' => 8,
+        ]);
+
+        $response->assertRedirect(route('admin.session-quotas.index', ['year' => 2026, 'month' => 6]));
+        $this->assertDatabaseHas('session_quotas', [
+            'course_class_id' => $class->id,
+            'year' => 2026,
+            'month' => 6,
+            'quota' => 8,
+        ]);
+
+        // Une seconde saisie sur le meme couple classe/mois met a jour la
+        // ligne existante plutot que d'en creer une seconde.
+        $this->actingAs($this->getAdminUser())->post(route('admin.session-quotas.store'), [
+            'course_class_id' => $class->id,
+            'year' => 2026,
+            'month' => 6,
+            'quota' => 10,
+        ]);
+
+        $this->assertSame(1, \App\Models\SessionQuota::where('course_class_id', $class->id)->count());
+        $this->assertDatabaseHas('session_quotas', ['course_class_id' => $class->id, 'quota' => 10]);
     }
 
     public function test_admin_can_create_class(): void
@@ -140,5 +284,93 @@ class AdminTest extends TestCase
 
         $response->assertRedirect(route('admin.classes.index'));
         $this->assertDatabaseHas('course_classes', ['name' => 'Class A']);
+    }
+
+    public function test_admin_can_view_expected_payments_for_a_month(): void
+    {
+        $program = Program::factory()->create(['name' => 'Programme Paiement']);
+        $student = User::factory()->create(['name' => 'Apprenant Attendu']);
+        $student->assignRole('student');
+
+        $plan = \App\Models\PaymentPlan::create([
+            'student_id'     => $student->id,
+            'program_id'     => $program->id,
+            'total_amount'   => 300000,
+            'advance_amount' => 0,
+        ]);
+
+        // Echeance payee, dans le mois filtre.
+        \App\Models\StudentPayment::create([
+            'student_id'      => $student->id,
+            'program_id'      => $program->id,
+            'payment_plan_id' => $plan->id,
+            'amount'          => 100000,
+            'due_date'        => '2026-06-05',
+            'paid_date'       => '2026-06-03',
+            'status'          => 'paid',
+        ]);
+
+        // Echeance en retard : non payee, date depassee.
+        \App\Models\StudentPayment::create([
+            'student_id'      => $student->id,
+            'program_id'      => $program->id,
+            'payment_plan_id' => $plan->id,
+            'amount'          => 50000,
+            'due_date'        => '2026-06-10',
+            'status'          => 'pending',
+        ]);
+
+        // Echeance hors mois filtre : ne doit pas apparaitre.
+        \App\Models\StudentPayment::create([
+            'student_id'      => $student->id,
+            'program_id'      => $program->id,
+            'payment_plan_id' => $plan->id,
+            'amount'          => 75000,
+            'due_date'        => '2026-07-05',
+            'status'          => 'pending',
+        ]);
+
+        $this->travelTo(\Carbon\Carbon::parse('2026-06-20'));
+
+        $response = $this->actingAs($this->getAdminUser())
+            ->get(route('admin.student-payments.index', ['month' => 6, 'year' => 2026]));
+
+        $response->assertStatus(200);
+        $response->assertSee('Apprenant Attendu');
+        $response->assertViewHas('totalAttendu', 150000.0);
+        $response->assertViewHas('totalRegle', 100000.0);
+        $response->assertViewHas('totalEnRetard', 50000.0);
+        $response->assertViewHas('totalAVenir', 0.0);
+
+        // L'echeance de juillet ne doit pas polluer le total de juin.
+        $paiements = $response->viewData('paiements');
+        $this->assertSame(2, $paiements->total());
+    }
+
+    public function test_admin_can_filter_expected_payments_by_student_name(): void
+    {
+        $program = Program::factory()->create(['name' => 'Programme Paiement Filtre']);
+        $studentA = User::factory()->create(['name' => 'Alice Paiement']);
+        $studentA->assignRole('student');
+        $studentB = User::factory()->create(['name' => 'Bob Paiement']);
+        $studentB->assignRole('student');
+
+        foreach ([$studentA, $studentB] as $student) {
+            \App\Models\StudentPayment::create([
+                'student_id' => $student->id,
+                'program_id' => $program->id,
+                'amount'     => 20000,
+                'due_date'   => '2026-06-15',
+                'status'     => 'pending',
+            ]);
+        }
+
+        $response = $this->actingAs($this->getAdminUser())->get(
+            route('admin.student-payments.index', ['month' => 6, 'year' => 2026, 'search' => 'Alice'])
+        );
+
+        $response->assertStatus(200);
+        $response->assertSee('Alice Paiement');
+        $response->assertDontSee('Bob Paiement');
     }
 }

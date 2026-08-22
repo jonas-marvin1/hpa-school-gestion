@@ -27,22 +27,30 @@ class ProfileController extends Controller
      */
     public function update(ProfileUpdateRequest $request): RedirectResponse
     {
-        $request->user()->fill($request->validated());
+        $valide = $request->validated();
+        $user = $request->user();
+
+        // full_phone n'est pas une colonne : c'est le numero au format
+        // international calcule cote client (widget intl-tel-input), qui
+        // alimente la colonne "phone".
+        $user->fill(collect($valide)->except('full_phone')->all());
+        if (array_key_exists('full_phone', $valide)) {
+            $user->phone = $valide['full_phone'] ?: null;
+        }
 
         if ($request->hasFile('avatar')) {
             $request->validate(['avatar' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048']);
-            $user = $request->user();
             if ($user->avatar && Storage::disk('public')->exists($user->avatar)) {
                 Storage::disk('public')->delete($user->avatar);
             }
             $user->avatar = $request->file('avatar')->store('avatars', 'public');
         }
 
-        if ($request->user()->isDirty('email')) {
-            $request->user()->email_verified_at = null;
+        if ($user->isDirty('email')) {
+            $user->email_verified_at = null;
         }
 
-        $request->user()->save();
+        $user->save();
 
         return Redirect::route('profile.edit')->with('status', 'profile-updated');
     }

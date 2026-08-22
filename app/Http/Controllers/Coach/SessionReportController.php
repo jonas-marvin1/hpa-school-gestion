@@ -33,6 +33,11 @@ class SessionReportController extends Controller
         if ($request->filled('month')) {
             $query->whereMonth('start_time', $request->month);
         }
+        // Sans ce filtre, choisir un mois remontait ce mois de toutes les
+        // annees confondues : aout 2026 et aout 2027 dans la meme liste.
+        if ($request->filled('year')) {
+            $query->whereYear('start_time', $request->year);
+        }
         if ($request->filled('class_id')) {
             $query->where('course_class_id', $request->class_id);
         }
@@ -48,7 +53,14 @@ class SessionReportController extends Controller
             $q->where('coach_id', $coachId);
         })->get();
 
-        return view('coach.reports.index', compact('reports', 'classes'));
+        // Annees proposees par le filtre : celles ou le coach a des seances,
+        // l'annee en cours et les annees a venir.
+        $years = \App\Services\AnneesDisponibles::depuisColonneDate(
+            ClassSession::where('coach_id', $coachId),
+            'start_time'
+        );
+
+        return view('coach.reports.index', compact('reports', 'classes', 'years'));
     }
 
     public function create(ClassSession $session)

@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use App\Models\Payment;
 use App\Models\ClassSession;
 use App\Models\CourseClass;
+use App\Services\AnneesDisponibles;
 use Illuminate\Support\Facades\Auth;
 
 class PaymentController extends Controller
@@ -23,6 +24,11 @@ class PaymentController extends Controller
         // Filters
         if ($request->filled('month')) {
             $query->whereMonth('start_time', $request->month);
+        }
+        // Sans ce filtre, choisir un mois remontait ce mois de toutes les
+        // annees confondues : aout 2026 et aout 2027 dans la meme liste.
+        if ($request->filled('year')) {
+            $query->whereYear('start_time', $request->year);
         }
         if ($request->filled('class_id')) {
             $query->where('course_class_id', $request->class_id);
@@ -61,11 +67,18 @@ class PaymentController extends Controller
             $q->where('coach_id', $coachId);
         })->get();
 
+        // Annees proposees par le filtre : celles ou le coach a des seances,
+        // l'annee en cours et les annees a venir.
+        $years = AnneesDisponibles::depuisColonneDate(
+            ClassSession::where('coach_id', $coachId),
+            'start_time'
+        );
+
         // Calculate Total à payer à ce jour (all pending fiches de paie, toutes périodes confondues)
         $totalToPay = Payment::where('coach_id', $coachId)
             ->where('status', 'pending')
             ->sum('total_amount');
 
-        return view('coach.payments.index', compact('sessions', 'sessionDetails', 'monthlyTotal', 'monthToCalculate', 'yearToCalculate', 'classes', 'totalToPay'));
+        return view('coach.payments.index', compact('sessions', 'sessionDetails', 'monthlyTotal', 'monthToCalculate', 'yearToCalculate', 'classes', 'totalToPay', 'years'));
     }
 }

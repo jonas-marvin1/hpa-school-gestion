@@ -3,17 +3,35 @@
 namespace App\Http\Controllers\Manager;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Concerns\ExportsCsv;
+use App\Http\Controllers\Concerns\GuardsSessionQuota;
 use App\Models\ClassSession;
 use App\Models\CourseClass;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 
 class ClassSessionController extends Controller
 {
-    public function index(Request $request)
+    use ExportsCsv;
+    use GuardsSessionQuota;
+
+    /** Libelles des statuts de session, partages entre l'ecran et l'export CSV. */
+    private const STATUTS = [
+        'scheduled' => 'Prévue',
+        'completed' => 'Effectuée',
+        'validated' => 'Validée',
+        'cancelled' => 'Annulée',
+    ];
+
+    /**
+     * Construit la requete des sessions filtree par les criteres de l'URL,
+     * sans pagination : utilisee telle quelle par l'ecran et par l'export CSV.
+     */
+    private function filtrerSessions(Request $request): Builder
     {
         $query = ClassSession::with(['courseClass', 'coach', 'sessionReport', 'attendances'])->orderBy('start_time', 'desc');
-        
+
         if ($request->has('search') && $request->search != '') {
             $search = $request->search;
             // Le OR doit rester enferme dans son propre groupe : sans ce
@@ -29,7 +47,7 @@ class ClassSessionController extends Controller
                 });
             });
         }
-        
+
         if ($request->has('status') && $request->status != '') {
             $query->where('status', $request->status);
         }
@@ -37,10 +55,35 @@ class ClassSessionController extends Controller
         if ($request->has('coach_id') && $request->coach_id != '') {
             $query->where('coach_id', $request->coach_id);
         }
-        
+
+        return $query;
+    }
+
+    public function index(Request $request)
+    {
         $coaches = User::role('coach')->get();
-        $sessions = $query->paginate(15)->appends($request->all());
+        $sessions = $this->filtrerSessions($request)->paginate(15)->appends($request->all());
         return view('manager.sessions.index', compact('sessions', 'coaches'));
+    }
+
+    /**
+     * Export CSV des sessions correspondant aux filtres actifs.
+     * Meme requete que l'ecran, sans pagination.
+     */
+    public function export(Request $request)
+    {
+        $sessions = $this->filtrerSessions($request)->get();
+
+        $lignes = $sessions->map(fn (ClassSession $session) => [
+            $session->start_time->format('d/m/Y'),
+            $session->start_time->format('H:i').' - '.$session->end_time->format('H:i'),
+            $session->courseClass->name ?? 'N/A',
+            $session->coach->name ?? 'N/A',
+            number_format((float) $session->amount, 2, ',', ''),
+            self::STATUTS[$session->status] ?? $session->status,
+        ]);
+
+        return $this->streamCsv('planning.csv', ['Date', 'Horaires', 'Classe', 'Formateur', 'Montant', 'Statut'], $lignes);
     }
 
     public function show(ClassSession $session)
@@ -76,6 +119,8 @@ class ClassSessionController extends Controller
             'amount' => 'required|numeric|min:0',
             'online_link' => 'nullable|url|max:255',
         ]);
+
+        $this->verifierQuotaSession($validated['course_class_id'], $validated['start_time']);
 
         ClassSession::create([
             'course_class_id' => $validated['course_class_id'],
@@ -114,6 +159,11 @@ class ClassSessionController extends Controller
             'online_link' => 'nullable|url|max:255',
             'status' => 'required|string|in:scheduled,completed,validated,cancelled'
         ]);
+
+        // La session en cours d'edition est exclue du comptage : sinon un
+        // simple changement d'horaire, sans changer de mois, se bloquerait
+        // elle-meme en se comptant deux fois.
+        $this->verifierQuotaSession($validated['course_class_id'], $validated['start_time'], $session->id);
 
         $session->update($validated);
 

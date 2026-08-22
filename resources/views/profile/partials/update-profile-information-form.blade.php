@@ -13,14 +13,25 @@
         @csrf
     </form>
 
+    <!-- intl-tel-input CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/intl-tel-input@18.2.1/build/css/intlTelInput.css">
+    <style>.iti { width: 100%; }</style>
+
     <form method="post" action="{{ route('profile.update') }}" class="mt-6 space-y-6" enctype="multipart/form-data">
         @csrf
         @method('patch')
 
         <div>
             <x-input-label for="name" :value="__('Name')" />
-            <x-text-input id="name" name="name" type="text" class="mt-1 block w-full" :value="old('name', $user->name)" required autofocus autocomplete="name" />
-            <x-input-error class="mt-2" :messages="$errors->get('name')" />
+            @if(auth()->user()->hasRole('student'))
+                {{-- Le nom identifie l'apprenant dans le Back Office Admin
+                     (recherche, listes) : seul l'Admin le definit. --}}
+                <p id="name" class="mt-1 text-gray-900">{{ $user->name }}</p>
+                <p class="mt-1 text-xs text-gray-500">Défini par l'administration, non modifiable.</p>
+            @else
+                <x-text-input id="name" name="name" type="text" class="mt-1 block w-full" :value="old('name', $user->name)" required autofocus autocomplete="name" />
+                <x-input-error class="mt-2" :messages="$errors->get('name')" />
+            @endif
         </div>
 
         <div>
@@ -32,6 +43,13 @@
             @endif
             <input id="avatar" name="avatar" type="file" accept="image/*" class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100" />
             <x-input-error class="mt-2" :messages="$errors->get('avatar')" />
+        </div>
+
+        <div>
+            <x-input-label for="phone" value="Téléphone" />
+            <input id="phone" name="phone" type="tel" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" value="{{ old('full_phone', $user->phone) }}">
+            <input type="hidden" name="full_phone" id="full_phone" value="{{ old('full_phone', $user->phone) }}">
+            <x-input-error class="mt-2" :messages="$errors->get('full_phone')" />
         </div>
 
         <div>
@@ -72,4 +90,28 @@
             @endif
         </div>
     </form>
+
+    <!-- intl-tel-input JS -->
+    <script src="https://cdn.jsdelivr.net/npm/intl-tel-input@18.2.1/build/js/intlTelInput.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            var input = document.querySelector('#phone');
+            var fullPhoneInput = document.querySelector('#full_phone');
+
+            var iti = window.intlTelInput(input, {
+                initialCountry: 'auto',
+                geoIpLookup: function(callback) {
+                    fetch('https://ipapi.co/json')
+                        .then(function(res) { return res.json(); })
+                        .then(function(data) { callback(data.country_code); })
+                        .catch(function() { callback('fr'); });
+                },
+                utilsScript: 'https://cdn.jsdelivr.net/npm/intl-tel-input@18.2.1/build/js/utils.js',
+            });
+
+            input.closest('form').addEventListener('submit', function() {
+                fullPhoneInput.value = iti.getNumber();
+            });
+        });
+    </script>
 </section>

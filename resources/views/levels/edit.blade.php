@@ -52,7 +52,23 @@
                         <button type="submit" class="inline-flex items-center px-4 py-2 bg-indigo-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700">
                             Enregistrer le niveau
                         </button>
+
+                        @if($peutCorriger)
+                            {{-- Reserve a l'admin : coche a part pour ne pas laisser
+                                 croire a un coach qu'une simple mise a jour efface
+                                 l'historique. --}}
+                            <label class="flex items-center gap-2 text-sm text-gray-600">
+                                <input type="checkbox" name="correction" value="1" class="rounded border-gray-300 text-red-600 focus:ring-red-500">
+                                Il s'agit d'une correction d'une erreur de saisie
+                            </label>
+                        @endif
                     </form>
+                    @if($peutCorriger)
+                        <p class="mt-2 text-xs text-gray-500">
+                            En cochant cette case, le niveau actuellement enregistré est traité comme une erreur :
+                            il n'apparaîtra plus dans l'historique ci-dessous après l'enregistrement.
+                        </p>
+                    @endif
                 </div>
             </div>
 
@@ -61,10 +77,13 @@
                     <h3 class="text-lg font-semibold mb-4">Historique de progression</h3>
 
                     @forelse($historique as $etape)
-                        <div class="border-l-2 border-gray-200 pl-4 pb-4 last:pb-0 relative">
-                            <span class="absolute -left-[5px] top-1.5 h-2 w-2 rounded-full bg-indigo-500"></span>
+                        <div class="border-l-2 {{ $etape->correction ? 'border-amber-300' : 'border-gray-200' }} pl-4 pb-4 last:pb-0 relative">
+                            <span class="absolute -left-[5px] top-1.5 h-2 w-2 rounded-full {{ $etape->correction ? 'bg-amber-500' : 'bg-indigo-500' }}"></span>
                             <p class="text-sm">
-                                @if($etape->avant)
+                                @if($etape->correction)
+                                    Niveau initial (corrigé) : <span class="font-bold text-indigo-700">{{ $etape->apres }}</span>
+                                    <span class="ml-1 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">Correction</span>
+                                @elseif($etape->avant)
                                     <span class="font-medium">{{ $etape->avant }}</span>
                                     <span class="mx-1 text-gray-400">&rarr;</span>
                                     <span class="font-bold text-indigo-700">{{ $etape->apres }}</span>

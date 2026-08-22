@@ -38,12 +38,25 @@ Route::middleware('auth')->group(function () {
 // Admin Routes
 Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    // Declaree avant le resource : sinon "export" serait capture par la
+    // route GET users/{user} du resource.
+    Route::get('/users/export', [UserController::class, 'export'])->name('users.export');
     Route::resource('users', UserController::class);
+    // Memes declarations "export avant resource" que pour users, sessions et
+    // payments : sinon "export" serait capture par la route GET {id} du resource.
+    Route::get('/programs/export', [ProgramController::class, 'export'])->name('programs.export');
     Route::resource('programs', ProgramController::class);
+    Route::get('/levels/export', [LevelController::class, 'export'])->name('levels.export');
     Route::resource('levels', LevelController::class);
+    Route::get('/classes/export', [CourseClassController::class, 'export'])->name('classes.export');
     Route::resource('classes', CourseClassController::class);
     Route::get('/classes/{class}/assign', [CourseClassController::class, 'assign'])->name('classes.assign.edit');
     Route::post('/classes/{class}/assign', [CourseClassController::class, 'assignUpdate'])->name('classes.assign.update');
+
+    // Suivi des quotas de sessions par classe et par mois (point 3).
+    Route::get('/quotas-sessions', [\App\Http\Controllers\Admin\SessionQuotaController::class, 'index'])->name('session-quotas.index');
+    Route::post('/quotas-sessions', [\App\Http\Controllers\Admin\SessionQuotaController::class, 'store'])->name('session-quotas.store');
+
     // Onglet « Évaluations » : archive des devoirs rendus, en consultation seule.
     // Les avis des apprenants ne sont plus ici, ils figurent desormais dans le
     // detail de la session, aux cotes du rapport du coach.
@@ -53,7 +66,14 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->grou
     Route::post('/apprenants/{student}/plan-paiement', [\App\Http\Controllers\Admin\PaymentPlanController::class, 'store'])->name('students.plan.store');
     Route::patch('/echeances/{echeance}/payee', [\App\Http\Controllers\Admin\PaymentPlanController::class, 'marquerPayee'])->name('echeances.payee');
 
+    // Vision previsionnelle des paiements attendus, tous apprenants
+    // confondus, mois par mois (point 6).
+    Route::get('/paiements-attendus', [\App\Http\Controllers\Admin\StudentPaymentController::class, 'index'])->name('student-payments.index');
+
     Route::get('/submissions', [\App\Http\Controllers\Admin\SubmissionArchiveController::class, 'index'])->name('submissions.index');
+    // Declaree avant /submissions/{submission} : sinon "export" serait
+    // capture comme identifiant de rendu.
+    Route::get('/submissions/export', [\App\Http\Controllers\Admin\SubmissionArchiveController::class, 'export'])->name('submissions.export');
     Route::get('/submissions/{submission}', [\App\Http\Controllers\Admin\SubmissionArchiveController::class, 'show'])->name('submissions.show');
 });
 
@@ -63,11 +83,30 @@ Route::middleware(['auth', 'role:manager|admin'])->prefix('manager')->name('mana
     Route::get('/classes', [CourseClassAssignmentController::class, 'index'])->name('classes.index');
     Route::get('/classes/{courseClass}/assign', [CourseClassAssignmentController::class, 'edit'])->name('classes.assign.edit');
     Route::post('/classes/{courseClass}/assign', [CourseClassAssignmentController::class, 'update'])->name('classes.assign.update');
+    // Declaree avant le resource : sinon "export" serait capture par la
+    // route GET sessions/{session} du resource.
+    Route::get('/sessions/export', [ClassSessionController::class, 'export'])->name('sessions.export');
     Route::resource('sessions', ClassSessionController::class);
-    Route::resource('payments', \App\Http\Controllers\Manager\PaymentController::class);
-    Route::post('payments/{payment}/pay', [\App\Http\Controllers\Manager\PaymentController::class, 'markAsPaid'])->name('payments.pay');
-    // Reglement groupe : evite de repeter le meme clic sur chaque ligne.
-    Route::post('payments/pay-many', [\App\Http\Controllers\Manager\PaymentController::class, 'markManyAsPaid'])->name('payments.payMany');
+
+    // Fiches de paie : le manager prepare et consulte, il ne decaisse pas.
+    // La generation reste ouverte, elle ne fait que constituer les fiches a
+    // partir des sessions validees et n'engage aucun paiement.
+    // Declaree avant le resource : sinon "export" serait capture par la
+    // route GET payments/{payment} du resource.
+    Route::get('/payments/export', [\App\Http\Controllers\Manager\PaymentController::class, 'export'])->name('payments.export');
+    Route::resource('payments', \App\Http\Controllers\Manager\PaymentController::class)
+        ->only(['index', 'create', 'store', 'show']);
+
+    // Reglement et suppression d'une fiche : reserves a l'administrateur.
+    // Marquer « payé » vaut sortie de caisse, et supprimer une fiche remet
+    // ses sessions en non facturees : deux gestes que seul l'admin assume.
+    Route::middleware('role:admin')->group(function () {
+        Route::put('payments/{payment}', [\App\Http\Controllers\Manager\PaymentController::class, 'update'])->name('payments.update');
+        Route::delete('payments/{payment}', [\App\Http\Controllers\Manager\PaymentController::class, 'destroy'])->name('payments.destroy');
+        Route::post('payments/{payment}/pay', [\App\Http\Controllers\Manager\PaymentController::class, 'markAsPaid'])->name('payments.pay');
+        // Reglement groupe : evite de repeter le meme clic sur chaque ligne.
+        Route::post('payments/pay-many', [\App\Http\Controllers\Manager\PaymentController::class, 'markManyAsPaid'])->name('payments.payMany');
+    });
 });
 
 // Coach Routes

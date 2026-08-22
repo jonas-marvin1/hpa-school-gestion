@@ -17,6 +17,18 @@ use Illuminate\Support\Facades\Auth;
  */
 trait RecordsRevisions
 {
+    /**
+     * Marque la prochaine sauvegarde comme correction d'une erreur de saisie,
+     * plutot que comme une evolution legitime. L'appelant positionne ce
+     * drapeau juste avant de modifier et sauvegarder le modele ; il est
+     * remis a plat une fois la revision enregistree.
+     *
+     * Propriete declaree ici plutot qu'un attribut de modele : elle ne doit
+     * jamais transiter par le mecanisme d'attributs Eloquent, au risque
+     * d'etre ecrite en base comme une colonne inexistante.
+     */
+    public bool $revisionEstCorrection = false;
+
     public static function bootRecordsRevisions(): void
     {
         static::created(function ($model) {
@@ -29,8 +41,10 @@ trait RecordsRevisions
             // Un enregistrement touche sans qu'aucun champ suivi ne bouge
             // (simple resauvegarde) ne merite pas une ligne de journal.
             if ($changements !== []) {
-                $model->enregistrerRevision('updated', $changements);
+                $model->enregistrerRevision('updated', $changements, $model->revisionEstCorrection);
             }
+
+            $model->revisionEstCorrection = false;
         });
 
         static::deleted(function ($model) {
@@ -95,7 +109,7 @@ trait RecordsRevisions
         return $changements;
     }
 
-    protected function enregistrerRevision(string $action, ?array $changements): void
+    protected function enregistrerRevision(string $action, ?array $changements, bool $correction = false): void
     {
         Revision::create([
             'revisable_type' => static::class,
@@ -103,6 +117,7 @@ trait RecordsRevisions
             'user_id'        => Auth::id(),
             'action'         => $action,
             'changes'        => $changements,
+            'is_correction'  => $correction,
         ]);
     }
 

@@ -46,7 +46,7 @@
             <!-- Filters -->
             <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                 <div class="p-6 text-gray-900">
-                    <form method="GET" action="{{ route('student.payments.index') }}" class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                    <form method="GET" action="{{ route('student.payments.index') }}" class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
                         <div>
                             <label for="month" class="block text-sm font-medium text-gray-700">Mois d'échéance</label>
                             <select name="month" id="month" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
@@ -54,6 +54,18 @@
                                 @for($m=1; $m<=12; $m++)
                                     <option value="{{ $m }}" {{ request('month') == $m ? 'selected' : '' }}>{{ str_pad($m, 2, '0', STR_PAD_LEFT) }}</option>
                                 @endfor
+                            </select>
+                        </div>
+                        <div>
+                            <label for="year" class="block text-sm font-medium text-gray-700">Année d'échéance</label>
+                            {{-- Annees fournies par le controleur : celles ayant des
+                                 echeances, l'annee en cours et les annees a venir.
+                                 Un echeancier deborde souvent sur l'annee suivante. --}}
+                            <select name="year" id="year" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                <option value="">Toutes les années</option>
+                                @foreach($years as $annee)
+                                    <option value="{{ $annee }}" {{ request('year') == $annee ? 'selected' : '' }}>{{ $annee }}</option>
+                                @endforeach
                             </select>
                         </div>
                         <div>

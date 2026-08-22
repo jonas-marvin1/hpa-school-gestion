@@ -1,3 +1,11 @@
+@php
+    // Regler ou supprimer une fiche est reserve a l'administrateur : les
+    // routes correspondantes sont protegees (cf. routes/web.php). On masque
+    // ici les commandes correspondantes pour ne pas proposer au manager des
+    // actions qui se solderaient par un 403.
+    $peutRegler = auth()->user()->hasRole('admin');
+@endphp
+
 <x-app-layout>
     <x-slot name="header">
         <div class="flex justify-between items-center">
@@ -42,7 +50,7 @@
             <!-- Advanced Search Filters -->
             <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg mb-6">
                 <div class="p-6 text-gray-900">
-                    <form method="GET" action="{{ route('manager.payments.index') }}" class="grid grid-cols-1 md:grid-cols-6 gap-4">
+                    <form method="GET" action="{{ route('manager.payments.index') }}" class="grid grid-cols-1 md:grid-cols-7 gap-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700">Recherche (Nom)</label>
                             <input type="text" name="search_coach" value="{{ request('search_coach') }}" placeholder="Rechercher formateur..." class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
@@ -54,6 +62,17 @@
                                 @foreach($coaches as $coach)
                                     <option value="{{ $coach->id }}" {{ request('coach_id') == $coach->id ? 'selected' : '' }}>
                                         {{ $coach->name }}
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Classe</label>
+                            <select name="class_id" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
+                                <option value="">Toutes les classes</option>
+                                @foreach($classes as $classe)
+                                    <option value="{{ $classe->id }}" {{ request('class_id') == $classe->id ? 'selected' : '' }}>
+                                        {{ $classe->name }}
                                     </option>
                                 @endforeach
                             </select>
@@ -90,6 +109,8 @@
                         <div class="flex items-end space-x-2">
                             <button type="submit" class="w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">Filtrer</button>
                             <a href="{{ route('manager.payments.index') }}" class="w-full bg-gray-200 text-gray-800 px-4 py-2 rounded-md text-center hover:bg-gray-300">Réinitialiser</a>
+                            {{-- Exporte exactement les lignes filtrees affichees a l'ecran. --}}
+                            <a href="{{ route('manager.payments.export', request()->query()) }}" class="w-full bg-gray-200 text-gray-800 px-4 py-2 rounded-md text-center hover:bg-gray-300">Exporter (CSV)</a>
                         </div>
                     </form>
                 </div>
@@ -104,7 +125,7 @@
                         <p class="text-sm text-gray-600">
                             <span class="font-semibold text-gray-900">{{ $payments->total() }}</span>
                             fiche{{ $payments->total() > 1 ? 's' : '' }}
-                            @if(request()->hasAny(['search_coach', 'coach_id', 'status', 'month', 'year']))
+                            @if(request()->hasAny(['search_coach', 'coach_id', 'class_id', 'status', 'month', 'year']))
                                 <span class="text-gray-500">pour ce filtre</span>
                             @endif
                             @if($payments->hasPages())
@@ -113,6 +134,7 @@
                         </p>
                     </div>
 
+                    @if($peutRegler)
                     {{-- Barre d'action groupee : n'apparait qu'une fois une fiche
                          cochee, pour ne pas encombrer l'ecran le reste du temps. --}}
                     <div x-show="nbSelection > 0" x-cloak
@@ -139,24 +161,29 @@
                             </form>
                         </div>
                     </div>
+                    @endif
 
                     <div class="overflow-x-auto">
                         <table class="w-full text-left border-collapse whitespace-nowrap text-sm">
                         <thead>
                             <tr class="bg-gray-50 text-gray-600">
+                                @if($peutRegler)
                                 <th class="border-b py-3 px-4 w-10">
                                     <input type="checkbox" @change="toutCocher($event.target.checked)"
                                            :checked="toutesCochees" :indeterminate="nbSelection > 0 && !toutesCochees"
                                            class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                                            title="Tout sélectionner (fiches en attente)">
                                 </th>
+                                @endif
                                 <th class="border-b py-3 px-4 font-semibold uppercase tracking-wider">Date</th>
                                 <th class="border-b py-3 px-4 font-semibold uppercase tracking-wider">Horaire</th>
                                 <th class="border-b py-3 px-4 font-semibold uppercase tracking-wider">Classe</th>
                                 <th class="border-b py-3 px-4 font-semibold uppercase tracking-wider">Formateur</th>
                                 <th class="border-b py-3 px-4 font-semibold uppercase tracking-wider text-center">Statut</th>
                                 <th class="border-b py-3 px-4 font-semibold uppercase tracking-wider text-right">Montant</th>
+                                @if($peutRegler)
                                 <th class="border-b py-3 px-4 font-semibold uppercase tracking-wider text-center">Action</th>
+                                @endif
                             </tr>
                         </thead>
                         <tbody>
@@ -165,6 +192,7 @@
                                     $session = $payment->sessions->first();
                                 @endphp
                                 <tr class="hover:bg-gray-50" :class="estSelectionnee({{ $payment->id }}) && 'bg-indigo-50'">
+                                    @if($peutRegler)
                                     <td class="border-b py-3 px-4">
                                         @if($payment->status === 'pending')
                                             {{-- Seules les fiches en attente sont selectionnables :
@@ -176,6 +204,7 @@
                                                    class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
                                         @endif
                                     </td>
+                                    @endif
                                     <td class="border-b py-3 px-4">
                                         {{ $session ? $session->start_time->format('d/m/Y') : str_pad($payment->month, 2, '0', STR_PAD_LEFT).'/'.$payment->year }}
                                     </td>
@@ -206,6 +235,7 @@
                                     <td class="border-b py-3 px-4 text-right font-bold">
                                         {{ number_format($payment->total_amount, 0, ',', ' ') }}
                                     </td>
+                                    @if($peutRegler)
                                     <td class="border-b py-3 px-4 text-center">
                                         <div class="flex flex-wrap justify-center gap-2">
                                             @if($payment->status === 'pending')
@@ -227,10 +257,11 @@
                                             </form>
                                         </div>
                                     </td>
+                                    @endif
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="8" class="py-4 text-center text-gray-500">Aucune fiche de paie trouvée.</td>
+                                    <td colspan="{{ $peutRegler ? 8 : 6 }}" class="py-4 text-center text-gray-500">Aucune fiche de paie trouvée.</td>
                                 </tr>
                             @endforelse
                         </tbody>
@@ -248,8 +279,6 @@
     <script>
         function selectionFiches() {
             return {
-                // Map id -> montant : permet d'afficher le total selectionne
-                // sans relire le tableau a chaque changement.
                 selection: [],
                 montants: {},
 
@@ -263,8 +292,6 @@
                     return new Intl.NumberFormat('fr-FR').format(Math.round(this.montantTotal));
                 },
 
-                // Ne compte que les fiches en attente : les lignes deja reglees
-                // n'ont pas de case a cocher.
                 get cochables() {
                     return Array.from(this.$el.querySelectorAll('[data-fiche]'));
                 },
