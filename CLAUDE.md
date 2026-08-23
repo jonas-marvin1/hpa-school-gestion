@@ -44,6 +44,32 @@ Pièges déjà rencontrés, à ne pas rechercher une seconde fois :
 - tuer `artisan serve` ne suffit pas, le processus enfant `server.php`
   survit et garde le port 8000.
 
+## Déploiement et sauvegardes
+
+Hébergement mutualisé, sans CI/CD : aucune GitHub Action ni script de
+déploiement n'existe dans ce dépôt. Le passage en production est une étape
+manuelle.
+
+- Circuit : branche de la fiche → environnement de test → merge dans `main`
+  → déploiement manuel vers l'hébergement mutualisé.
+- Seul `public/` est exposé au web. Un `.htaccess` à la racine de
+  l'application bloque l'accès direct au reste de l'arborescence — protège
+  notamment `.env`, qui contient le mot de passe base de données et
+  `APP_KEY`. Voir le commentaire du fichier pour le détail du risque
+  (`.env` téléchargeable comme fichier statique sans ce garde-fou).
+- `origin/main` à jour ne garantit pas que le serveur de production a déjà
+  récupéré ce commit : après un merge important, vérifier manuellement côté
+  hébergement.
+
+**Ce que git ne sauvegarde jamais**, à garder en tête pour toute reprise du
+projet :
+- Le `.env` de production (secrets base de données, `APP_KEY`, config
+  mail) : jamais versionné, aucune copie de secours connue dans ce dépôt.
+- Les données réelles (base de données, avatars uploadés) : exclues de git
+  par principe, les dumps SQL contenant des données personnelles d'élèves
+  (cf. Conventions de code). Nécessitent un mécanisme de sauvegarde
+  indépendant de git — aucun n'est identifié dans ce dépôt au 22/08/2026.
+
 ## Organisation du travail
 
 Chaque jeudi soir, une fiche de tâches numérotées arrive (maintenance et
