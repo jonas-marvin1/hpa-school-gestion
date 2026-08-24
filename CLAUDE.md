@@ -6,11 +6,14 @@ projet à chaque session.
 
 ## Pile technique
 
-- Laravel 12, PHP 8.3
+- Laravel 12, PHP 8.2
 - Blade + Tailwind CSS 3 + Alpine.js (pas de framework front séparé)
 - Spatie Laravel Permission pour les rôles
 - MariaDB en développement, MySQL en production (hébergement mutualisé)
-- PHPUnit — 76 tests, à garder au vert
+- PHPUnit — 86 tests, à garder au vert
+
+Modèle métier et décisions de conception : voir
+[docs/architecture.md](docs/architecture.md).
 
 ## Rôles applicatifs
 
@@ -48,27 +51,16 @@ Pièges déjà rencontrés, à ne pas rechercher une seconde fois :
 
 Hébergement mutualisé, sans CI/CD : aucune GitHub Action ni script de
 déploiement n'existe dans ce dépôt. Le passage en production est une étape
-manuelle.
+manuelle, détaillée pas à pas dans
+[docs/livraison.md](docs/livraison.md) — organisation de l'hébergement,
+séquence de déploiement, retour arrière.
 
-- Circuit : branche de la fiche → environnement de test → merge dans `main`
-  → déploiement manuel vers l'hébergement mutualisé.
-- Seul `public/` est exposé au web. Un `.htaccess` à la racine de
-  l'application bloque l'accès direct au reste de l'arborescence — protège
-  notamment `.env`, qui contient le mot de passe base de données et
-  `APP_KEY`. Voir le commentaire du fichier pour le détail du risque
-  (`.env` téléchargeable comme fichier statique sans ce garde-fou).
-- `origin/main` à jour ne garantit pas que le serveur de production a déjà
-  récupéré ce commit : après un merge important, vérifier manuellement côté
-  hébergement.
+Ce que Git sauvegarde et ne sauvegarde jamais (secrets, bases de données,
+fichiers utilisateurs) : voir [docs/sauvegardes.md](docs/sauvegardes.md).
 
-**Ce que git ne sauvegarde jamais**, à garder en tête pour toute reprise du
-projet :
-- Le `.env` de production (secrets base de données, `APP_KEY`, config
-  mail) : jamais versionné, aucune copie de secours connue dans ce dépôt.
-- Les données réelles (base de données, avatars uploadés) : exclues de git
-  par principe, les dumps SQL contenant des données personnelles d'élèves
-  (cf. Conventions de code). Nécessitent un mécanisme de sauvegarde
-  indépendant de git — aucun n'est identifié dans ce dépôt au 22/08/2026.
+**Ne jamais supprimer le `.htaccess` à la racine de l'application** : sans
+lui, `.env` devient téléchargeable depuis `hpacademya.com`. Détail dans
+[docs/architecture.md](docs/architecture.md).
 
 ## Organisation du travail
 
@@ -106,6 +98,11 @@ nouveaux développements mêlés).
   fantaisiste doit être ignorée, pas provoquer une erreur.
 - Ne jamais committer de dump SQL : ils contiennent des données
   personnelles d'élèves. `*.sql` est dans `.gitignore`.
+- `public/build` est versionné, contrairement à l'usage courant : l'hébergement
+  n'a ni `node` ni `npm`, les assets ne peuvent pas y être compilés. Toute
+  modification de CSS ou de classes Tailwind impose donc `npm run build` en
+  local, puis un commit du résultat — sinon la production perd son apparence
+  au déploiement.
 
 ## Service partagé
 
@@ -124,6 +121,10 @@ suivante. Tout nouveau filtre par année doit l'utiliser.
   des fiches ; la page n'est atteignable qu'en saisissant l'URL.
 - Dépendances Tailwind possiblement enchevêtrées entre la v3 et le plugin
   `@tailwindcss/vite` v4 dans `package.json`.
+- `MaintenanceController` (exécution de commandes Artisan depuis le
+  navigateur) n'a plus lieu d'être depuis que l'accès SSH est actif ; à
+  supprimer lors d'un prochain passage. Détail dans
+  [docs/architecture.md](docs/architecture.md).
 
 ## Attentes de travail
 
@@ -134,11 +135,11 @@ migration sans l'annoncer explicitement au préalable.
 
 ## Tenue du journal
 
-Apres chaque point livre, avant de proposer le commit, mettre a jour le
+Après chaque point livré, avant de proposer le commit, mettre à jour le
 fichier de fiche correspondant dans `docs/fiches/` :
 
-- passer la ligne du point a « Livre » dans le tableau d'avancement ;
-- ajouter sous « Decisions de perimetre » toute decision non evidente prise
-  pendant le developpement, avec sa raison en une phrase.
+- passer la ligne du point à « Livré » dans le tableau d'avancement ;
+- ajouter sous « Décisions de périmètre » toute décision non évidente prise
+  pendant le développement, avec sa raison en une phrase.
 
-Ne consigner que ce qui ne se devine pas a la lecture du code.
+Ne consigner que ce qui ne se devine pas à la lecture du code.
