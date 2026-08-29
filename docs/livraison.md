@@ -73,6 +73,10 @@ git checkout -f <branche ou tag>
 
 # 3. Relire ce qui va être supprimé avant de nettoyer l'arborescence,
 #    puis nettoyer en préservant les sauvegardes de .env
+#    Ne jamais lancer le "git clean -fd" si la sortie de "git clean -nd"
+#    liste un fichier ".env.sauvegarde-*" : l'option -e ci-dessous l'exclut
+#    en théorie, mais un nom de fichier inattendu (mauvaise date, mauvaise
+#    extension) passerait au travers du filtre et serait supprimé.
 git clean -nd
 git clean -fd -e ".env.sauvegarde-*"
 
@@ -89,6 +93,9 @@ php artisan migrate:status
 php artisan migrate --force
 
 # 7. Lien vers les fichiers déposés par les utilisateurs
+#    Ne sert qu'au premier déploiement d'un environnement : sur un
+#    environnement déjà déployé, la commande répond « The [public/storage]
+#    link already exists ». Ce n'est pas une erreur, poursuivre la séquence.
 php artisan storage:link
 
 # 8. Sortir du mode maintenance (production uniquement)
