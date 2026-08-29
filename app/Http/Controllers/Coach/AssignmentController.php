@@ -13,21 +13,21 @@ class AssignmentController extends Controller
     public function index(Request $request)
     {
         $coach = Auth::user();
-        
+
         // Find all classes this coach is assigned to (either directly or via sessions)
         $classIds = \App\Models\ClassSession::where('coach_id', $coach->id)->pluck('course_class_id')->unique();
-        
+
         $query = Assignment::with('courseClass')
             ->whereIn('course_class_id', $classIds)
             ->orderBy('due_date', 'desc');
-            
+
         if ($request->has('search') && $request->search != '') {
             $search = $request->search;
             $query->where('title', 'like', "%{$search}%");
         }
-            
+
         $assignments = $query->paginate(10)->appends($request->all());
-            
+
         return view('coach.assignments.index', compact('assignments'));
     }
 
@@ -36,7 +36,7 @@ class AssignmentController extends Controller
         $coach = Auth::user();
         $classIds = \App\Models\ClassSession::where('coach_id', $coach->id)->pluck('course_class_id')->unique();
         $classes = CourseClass::whereIn('id', $classIds)->get();
-        
+
         return view('coach.assignments.create', compact('classes'));
     }
 
@@ -53,7 +53,7 @@ class AssignmentController extends Controller
         ]);
 
         $validated['coach_id'] = Auth::id();
-        
+
         if ($request->hasFile('attachment')) {
             $validated['attachment'] = $request->file('attachment')->store('assignments', 'public');
         }
@@ -65,7 +65,8 @@ class AssignmentController extends Controller
 
     public function edit(Assignment $assignment)
     {
-        // Simple authorization check can be added here
+        $this->autoriserClasseDuCoach($assignment);
+
         $coach = Auth::user();
         $classIds = \App\Models\ClassSession::where('coach_id', $coach->id)->pluck('course_class_id')->unique();
         $classes = CourseClass::whereIn('id', $classIds)->get();
@@ -75,6 +76,8 @@ class AssignmentController extends Controller
 
     public function update(Request $request, Assignment $assignment)
     {
+        $this->autoriserClasseDuCoach($assignment);
+
         $validated = $request->validate([
             'course_class_id' => 'required|exists:course_classes,id',
             'title' => 'required|string|max:255',
@@ -96,7 +99,21 @@ class AssignmentController extends Controller
 
     public function destroy(Assignment $assignment)
     {
+        $this->autoriserClasseDuCoach($assignment);
+
         $assignment->delete();
         return redirect()->route('coach.assignments.index')->with('status', 'Devoir supprimé.');
+    }
+
+    /**
+     * Sans ce controle, un coach pouvait modifier ou supprimer par URL
+     * forgee un devoir d'une classe qui n'est pas la sienne : edit/update/
+     * destroy ne verifiaient rien, contrairement a index()/create().
+     */
+    private function autoriserClasseDuCoach(Assignment $assignment): void
+    {
+        $classIds = \App\Models\ClassSession::where('coach_id', Auth::id())->pluck('course_class_id')->unique();
+
+        abort_unless($classIds->contains($assignment->course_class_id), 403);
     }
 }
