@@ -67,6 +67,36 @@ class CoachTest extends TestCase
         ]);
     }
 
+    public function test_coach_cannot_view_evaluations_for_a_class_that_is_not_theirs(): void
+    {
+        $coach = $this->getCoachUser();
+        $autreCoach = $this->getCoachUser();
+        $program = \App\Models\Program::factory()->create(['name' => 'Test Prog']);
+        $level = \App\Models\Level::factory()->create(['program_id' => $program->id, 'name' => 'Test Level']);
+        $class = CourseClass::factory()->create(['level_id' => $level->id, 'name' => 'Test Class']);
+        $class->users()->attach($autreCoach->id, ['role' => 'coach']);
+
+        ClassSession::factory()->create([
+            'course_class_id' => $class->id,
+            'coach_id' => $autreCoach->id,
+            'start_time' => now()->addDay(),
+            'end_time' => now()->addDay()->addHours(2),
+        ]);
+
+        $assignment = \App\Models\Assignment::create([
+            'course_class_id' => $class->id,
+            'coach_id' => $autreCoach->id,
+            'title' => 'Devoir hors classe',
+            'description' => 'Description',
+            'due_date' => now()->addDays(5),
+            'type' => 'text',
+        ]);
+
+        $response = $this->actingAs($coach)->get(route('coach.evaluations.index', $assignment));
+
+        $response->assertStatus(403);
+    }
+
     public function test_coach_cannot_create_session_when_quota_reached(): void
     {
         $coach = $this->getCoachUser();
