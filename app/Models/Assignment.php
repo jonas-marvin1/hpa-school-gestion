@@ -10,7 +10,7 @@ class Assignment extends Model
     /** @use HasFactory<\Database\Factories\AssignmentFactory> */
     use HasFactory;
 
-    protected $fillable = ['course_class_id', 'coach_id', 'title', 'description', 'type', 'evaluation_link', 'attachment', 'due_date'];
+    protected $fillable = ['course_class_id', 'student_id', 'coach_id', 'title', 'description', 'type', 'evaluation_link', 'attachment', 'due_date'];
 
     protected $casts = [
         'due_date' => 'datetime',
@@ -21,9 +21,17 @@ class Assignment extends Model
         return $this->belongsTo(CourseClass::class);
     }
 
+    // Createur de l'evaluation, quel que soit son role (coach ou
+    // gestionnaire) : nom conserve tel quel, voir dette technique CLAUDE.md.
     public function coach()
     {
         return $this->belongsTo(User::class, 'coach_id');
+    }
+
+    // Vide = attribuee a toute la classe. Renseignee = a cet apprenant seul.
+    public function student()
+    {
+        return $this->belongsTo(User::class, 'student_id');
     }
 
     public function submissions()

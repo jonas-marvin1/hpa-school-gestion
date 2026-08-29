@@ -2,9 +2,9 @@
     <x-slot name="header">
         <div class="flex justify-between items-center">
             <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-                {{ __('Mes Devoirs') }}
+                {{ __('Évaluations') }}
             </h2>
-            <a href="{{ route('coach.assignments.create') }}" class="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 text-sm font-medium">
+            <a href="{{ route('manager.assignments.create') }}" class="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 text-sm font-medium">
                 Nouveau Devoir
             </a>
         </div>
@@ -12,7 +12,7 @@
 
     <div class="py-12">
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
-            
+
             @if(session('status'))
                 <div class="mb-4 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative" role="alert">
                     <span class="block sm:inline">{{ session('status') }}</span>
@@ -55,9 +55,11 @@
                                         </span>
                                     </td>
                                     <td class="border-b py-2 px-4 flex items-center gap-3">
-                                        <a href="{{ route('coach.evaluations.index', $assignment) }}" class="text-green-600 hover:underline">Évaluer ({{ $assignment->submissions()->count() }})</a>
+                                        <a href="{{ route('manager.evaluations.index', $assignment) }}" class="text-green-600 hover:underline">Évaluer ({{ $assignment->submissions()->count() }})</a>
                                         <span class="text-gray-300">|</span>
-                                        <form action="{{ route('coach.assignments.destroy', $assignment) }}" method="POST" onsubmit="return confirm('Supprimer ce devoir ?');">
+                                        <a href="{{ route('manager.assignments.edit', $assignment) }}" class="text-indigo-600 hover:underline">Modifier</a>
+                                        <span class="text-gray-300">|</span>
+                                        <form action="{{ route('manager.assignments.destroy', $assignment) }}" method="POST" onsubmit="return confirm('Supprimer ce devoir ?');">
                                             @csrf
                                             @method('DELETE')
                                             <button type="submit" class="text-red-600 hover:underline text-sm">Supprimer</button>

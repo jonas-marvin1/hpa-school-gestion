@@ -22,6 +22,10 @@ class AssignmentController extends Controller
                 $q->where('student_id', $student->id)->with('grade');
             }])
             ->whereIn('course_class_id', $classIds)
+            // Un devoir nominatif ne doit apparaitre que chez l'apprenant vise.
+            ->where(function ($q) use ($student) {
+                $q->whereNull('student_id')->orWhere('student_id', $student->id);
+            })
             ->orderBy('due_date', 'asc')
             ->get();
 
@@ -37,6 +41,12 @@ class AssignmentController extends Controller
             abort(403, 'Vous n\'avez pas accès à ce devoir.');
         }
 
+        // Devoir nominatif attribue a un autre apprenant : sans ce controle,
+        // une URL directe y donnerait acces malgre l'absence de l'index.
+        if ($assignment->student_id && $assignment->student_id !== $student->id) {
+            abort(403, 'Vous n\'avez pas accès à ce devoir.');
+        }
+
         $submission = Submission::with('grade')->where('assignment_id', $assignment->id)->where('student_id', $student->id)->first();
 
         return view('student.assignments.show', compact('assignment', 'submission'));
@@ -48,6 +58,11 @@ class AssignmentController extends Controller
 
         // Ensure student is in the class
         if (!$student->courseClasses->contains($assignment->course_class_id)) {
+            abort(403, 'Vous n\'avez pas accès à ce devoir.');
+        }
+
+        // Devoir nominatif attribue a un autre apprenant : meme controle que show().
+        if ($assignment->student_id && $assignment->student_id !== $student->id) {
             abort(403, 'Vous n\'avez pas accès à ce devoir.');
         }
 

@@ -1,12 +1,11 @@
 <?php
 
-namespace App\Http\Controllers\Coach;
+namespace App\Http\Controllers\Manager;
 
 use App\Http\Controllers\Controller;
 use App\Models\Assignment;
-use App\Models\ClassSession;
-use App\Models\Submission;
 use App\Models\Grade;
+use App\Models\Submission;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -14,21 +13,17 @@ class EvaluationController extends Controller
 {
     public function index(Assignment $assignment)
     {
-        // Sans ce controle, un coach pouvait ouvrir par URL les rendus d'une
-        // classe qui n'est pas la sienne : meme regle que Assignment::index().
-        $classIds = ClassSession::where('coach_id', Auth::id())->pluck('course_class_id')->unique();
-        abort_unless($classIds->contains($assignment->course_class_id), 403);
-
-        // Devoir nominatif : seul l'apprenant vise apparait, les autres ne
-        // voient meme pas ce devoir (Student\AssignmentController).
+        // La gestionnaire a le controle complet, sur toutes les classes :
+        // aucune restriction d'appartenance a verifier ici, contrairement au
+        // coach (Coach\EvaluationController).
+        // Devoir nominatif : seul l'apprenant vise apparait.
         $students = $assignment->student_id
             ? collect([$assignment->student])->filter()
             : $assignment->courseClass->users()->role('student')->get();
-        
-        // Get all submissions for this assignment with grades
+
         $submissions = Submission::with('grade')->where('assignment_id', $assignment->id)->get()->keyBy('student_id');
 
-        return view('coach.evaluations.index', compact('assignment', 'students', 'submissions'));
+        return view('manager.evaluations.index', compact('assignment', 'students', 'submissions'));
     }
 
     public function store(Request $request, Submission $submission)
@@ -38,6 +33,8 @@ class EvaluationController extends Controller
             'feedback' => 'nullable|string',
         ]);
 
+        // Correcteur : voir dette technique CLAUDE.md sur le nommage de
+        // cette colonne, partagee avec le coach.
         Grade::updateOrCreate(
             [
                 'submission_id' => $submission->id,

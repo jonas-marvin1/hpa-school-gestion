@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\Coach;
+namespace App\Http\Controllers\Manager;
 
 use App\Http\Controllers\Concerns\GereAttributionApprenant;
 use App\Http\Controllers\Controller;
@@ -14,32 +14,25 @@ class AssignmentController extends Controller
 
     public function index(Request $request)
     {
-        $coach = Auth::user();
-
-        // Find all classes this coach is assigned to (either directly or via sessions)
-        $classIds = \App\Models\ClassSession::where('coach_id', $coach->id)->pluck('course_class_id')->unique();
-
+        // Perimetre de la gestionnaire : toutes les classes, comme partout
+        // ailleurs dans son espace (fiche du 27/08/2026, point 1).
         $query = Assignment::with(['courseClass', 'coach.roles', 'student'])
-            ->whereIn('course_class_id', $classIds)
             ->orderBy('due_date', 'desc');
 
         if ($request->has('search') && $request->search != '') {
-            $search = $request->search;
-            $query->where('title', 'like', "%{$search}%");
+            $query->where('title', 'like', '%' . $request->search . '%');
         }
 
         $assignments = $query->paginate(10)->appends($request->all());
 
-        return view('coach.assignments.index', compact('assignments'));
+        return view('manager.assignments.index', compact('assignments'));
     }
 
     public function create()
     {
-        $coach = Auth::user();
-        $classIds = \App\Models\ClassSession::where('coach_id', $coach->id)->pluck('course_class_id')->unique();
-        $classes = $this->classesAvecApprenants($classIds);
+        $classes = $this->classesAvecApprenants();
 
-        return view('coach.assignments.create', compact('classes'));
+        return view('manager.assignments.create', compact('classes'));
     }
 
     public function store(Request $request)
@@ -55,6 +48,8 @@ class AssignmentController extends Controller
             'attachment' => 'nullable|file|max:10240',
         ]);
 
+        // Createur de l'evaluation : voir dette technique CLAUDE.md sur le
+        // nommage de cette colonne, partagee avec le coach.
         $validated['coach_id'] = Auth::id();
 
         if ($request->hasFile('attachment')) {
@@ -63,24 +58,20 @@ class AssignmentController extends Controller
 
         Assignment::create($validated);
 
-        return redirect()->route('coach.assignments.index')->with('status', 'Devoir créé avec succès.');
+        return redirect()->route('manager.assignments.index')->with('status', 'Devoir créé avec succès.');
     }
 
     public function edit(Assignment $assignment)
     {
-        $this->autoriserClasseDuCoach($assignment);
+        // La gestionnaire a le controle complet : aucune restriction sur le
+        // createur de l'evaluation, contrairement au coach.
+        $classes = $this->classesAvecApprenants();
 
-        $coach = Auth::user();
-        $classIds = \App\Models\ClassSession::where('coach_id', $coach->id)->pluck('course_class_id')->unique();
-        $classes = $this->classesAvecApprenants($classIds);
-
-        return view('coach.assignments.edit', compact('assignment', 'classes'));
+        return view('manager.assignments.edit', compact('assignment', 'classes'));
     }
 
     public function update(Request $request, Assignment $assignment)
     {
-        $this->autoriserClasseDuCoach($assignment);
-
         $validated = $request->validate([
             'course_class_id' => 'required|exists:course_classes,id',
             'student_id' => ['nullable', 'exists:users,id', $this->regleApprenantDeLaClasse($request)],
@@ -98,26 +89,13 @@ class AssignmentController extends Controller
 
         $assignment->update($validated);
 
-        return redirect()->route('coach.assignments.index')->with('status', 'Devoir mis à jour.');
+        return redirect()->route('manager.assignments.index')->with('status', 'Devoir mis à jour.');
     }
 
     public function destroy(Assignment $assignment)
     {
-        $this->autoriserClasseDuCoach($assignment);
-
         $assignment->delete();
-        return redirect()->route('coach.assignments.index')->with('status', 'Devoir supprimé.');
-    }
 
-    /**
-     * Sans ce controle, un coach pouvait modifier ou supprimer par URL
-     * forgee un devoir d'une classe qui n'est pas la sienne : edit/update/
-     * destroy ne verifiaient rien, contrairement a index()/create().
-     */
-    private function autoriserClasseDuCoach(Assignment $assignment): void
-    {
-        $classIds = \App\Models\ClassSession::where('coach_id', Auth::id())->pluck('course_class_id')->unique();
-
-        abort_unless($classIds->contains($assignment->course_class_id), 403);
+        return redirect()->route('manager.assignments.index')->with('status', 'Devoir supprimé.');
     }
 }

@@ -155,7 +155,7 @@ class SendDueReminders extends Command
             $targetDate = now()->addDays($offset)->toDateString();
 
             $assignments = Assignment::whereDate('due_date', $targetDate)
-                ->with(['courseClass.users', 'submissions'])
+                ->with(['courseClass.users', 'submissions', 'student'])
                 ->get();
 
             foreach ($assignments as $assignment) {
@@ -165,7 +165,11 @@ class SendDueReminders extends Command
 
                 $submittedStudentIds = $assignment->submissions->pluck('student_id')->all();
 
-                $students = $assignment->courseClass->users->filter(fn (User $u) => $u->hasRole('student'));
+                // Devoir nominatif : seul l'apprenant vise recoit le rappel,
+                // les autres ne voient meme pas ce devoir dans leur espace.
+                $students = $assignment->student_id
+                    ? collect([$assignment->student])->filter()
+                    : $assignment->courseClass->users->filter(fn (User $u) => $u->hasRole('student'));
 
                 foreach ($students as $student) {
                     if (in_array($student->id, $submittedStudentIds, true)) {

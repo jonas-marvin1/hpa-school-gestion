@@ -86,6 +86,9 @@
                         <x-nav-link :href="route('manager.payments.index')" :active="request()->routeIs('manager.payments.*')">
                             {{ __('Fiches de Paie') }}
                         </x-nav-link>
+                        <x-nav-link :href="route('manager.assignments.index')" :active="request()->routeIs('manager.assignments.*', 'manager.evaluations.*')">
+                            {{ __('Évaluations') }}
+                        </x-nav-link>
                         <x-nav-link :href="route('messages.index')" :active="request()->routeIs('messages.*')">
                             {{ __('Messagerie') }}
                         </x-nav-link>
@@ -293,6 +296,9 @@
                 </x-responsive-nav-link>
                 <x-responsive-nav-link :href="route('manager.payments.index')" :active="request()->routeIs('manager.payments.*')">
                     {{ __('Fiches de Paie') }}
+                </x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('manager.assignments.index')" :active="request()->routeIs('manager.assignments.*', 'manager.evaluations.*')">
+                    {{ __('Évaluations') }}
                 </x-responsive-nav-link>
             @endrole
 
