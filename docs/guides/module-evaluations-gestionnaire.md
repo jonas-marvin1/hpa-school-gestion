@@ -1,4 +1,4 @@
-# Guide : créer et corriger une évaluation
+# Module Évaluations — guide de la gestionnaire
 
 Ce guide s'adresse à la gestionnaire. Il décrit, dans l'ordre où vous les
 ferez, les trois gestes possibles sur un devoir : le créer pour une classe
