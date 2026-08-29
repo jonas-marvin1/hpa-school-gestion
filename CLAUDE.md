@@ -125,6 +125,12 @@ suivante. Tout nouveau filtre par année doit l'utiliser.
   navigateur) n'a plus lieu d'être depuis que l'accès SSH est actif ; à
   supprimer lors d'un prochain passage. Détail dans
   [docs/architecture.md](docs/architecture.md).
+- `assignments.coach_id` et `Grade.coach_id` désignent respectivement le
+  créateur et le correcteur d'une évaluation, quel que soit son rôle réel
+  (coach ou gestionnaire) depuis que la gestionnaire peut aussi créer et
+  corriger des évaluations — noms conservés tels quels, une migration sur
+  une clé étrangère en production ne se justifie pas pour un gain de
+  nommage.
 
 ## Attentes de travail
 

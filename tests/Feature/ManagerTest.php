@@ -267,4 +267,151 @@ class ManagerTest extends TestCase
 
         $response->assertRedirect(route('manager.payments.index'));
     }
+
+    public function test_manager_can_create_assignment_for_whole_class(): void
+    {
+        $program = \App\Models\Program::factory()->create(['name' => 'Test Prog']);
+        $level = \App\Models\Level::factory()->create(['program_id' => $program->id, 'name' => 'Test Level']);
+        $class = CourseClass::factory()->create(['level_id' => $level->id, 'name' => 'Test Class']);
+
+        $response = $this->actingAs($this->getManagerUser())->post(route('manager.assignments.store'), [
+            'course_class_id' => $class->id,
+            'title' => 'Devoir gestionnaire',
+            'description' => 'Description',
+            'due_date' => now()->addDays(5)->format('Y-m-d\TH:i'),
+            'type' => 'text',
+        ]);
+
+        $response->assertRedirect(route('manager.assignments.index'));
+        $this->assertDatabaseHas('assignments', [
+            'title' => 'Devoir gestionnaire',
+            'student_id' => null,
+        ]);
+    }
+
+    public function test_manager_can_create_individual_assignment(): void
+    {
+        $program = \App\Models\Program::factory()->create(['name' => 'Test Prog']);
+        $level = \App\Models\Level::factory()->create(['program_id' => $program->id, 'name' => 'Test Level']);
+        $class = CourseClass::factory()->create(['level_id' => $level->id, 'name' => 'Test Class']);
+        $eleve = User::factory()->create();
+        $eleve->assignRole('student');
+        $class->users()->attach($eleve->id, ['role' => 'student']);
+
+        $response = $this->actingAs($this->getManagerUser())->post(route('manager.assignments.store'), [
+            'course_class_id' => $class->id,
+            'student_id' => $eleve->id,
+            'title' => 'Devoir individuel',
+            'description' => 'Description',
+            'due_date' => now()->addDays(5)->format('Y-m-d\TH:i'),
+            'type' => 'text',
+        ]);
+
+        $response->assertRedirect(route('manager.assignments.index'));
+        $this->assertDatabaseHas('assignments', [
+            'title' => 'Devoir individuel',
+            'student_id' => $eleve->id,
+        ]);
+    }
+
+    public function test_manager_cannot_attribute_assignment_to_student_of_another_class(): void
+    {
+        $program = \App\Models\Program::factory()->create(['name' => 'Test Prog']);
+        $level = \App\Models\Level::factory()->create(['program_id' => $program->id, 'name' => 'Test Level']);
+        $class = CourseClass::factory()->create(['level_id' => $level->id, 'name' => 'Test Class']);
+        $autreClasse = CourseClass::factory()->create(['level_id' => $level->id, 'name' => 'Autre Class']);
+        $eleveHorsClasse = User::factory()->create();
+        $eleveHorsClasse->assignRole('student');
+        $autreClasse->users()->attach($eleveHorsClasse->id, ['role' => 'student']);
+
+        $response = $this->actingAs($this->getManagerUser())->post(route('manager.assignments.store'), [
+            'course_class_id' => $class->id,
+            'student_id' => $eleveHorsClasse->id,
+            'title' => 'Devoir invalide',
+            'description' => 'Description',
+            'due_date' => now()->addDays(5)->format('Y-m-d\TH:i'),
+            'type' => 'text',
+        ]);
+
+        $response->assertSessionHasErrors('student_id');
+        $this->assertDatabaseMissing('assignments', ['title' => 'Devoir invalide']);
+    }
+
+    public function test_manager_can_edit_and_delete_a_coach_created_assignment(): void
+    {
+        $coach = User::factory()->create();
+        $coach->assignRole('coach');
+        $program = \App\Models\Program::factory()->create(['name' => 'Test Prog']);
+        $level = \App\Models\Level::factory()->create(['program_id' => $program->id, 'name' => 'Test Level']);
+        $class = CourseClass::factory()->create(['level_id' => $level->id, 'name' => 'Test Class']);
+
+        $assignment = \App\Models\Assignment::create([
+            'course_class_id' => $class->id,
+            'coach_id' => $coach->id,
+            'title' => 'Devoir du coach',
+            'description' => 'Description',
+            'due_date' => now()->addDays(5),
+            'type' => 'text',
+        ]);
+
+        $manager = $this->getManagerUser();
+
+        $this->actingAs($manager)->put(route('manager.assignments.update', $assignment), [
+            'course_class_id' => $class->id,
+            'title' => 'Devoir modifie par la gestionnaire',
+            'description' => 'Description',
+            'due_date' => now()->addDays(6)->format('Y-m-d'),
+            'type' => 'text',
+        ])->assertRedirect(route('manager.assignments.index'));
+
+        $this->assertDatabaseHas('assignments', [
+            'id' => $assignment->id,
+            'title' => 'Devoir modifie par la gestionnaire',
+        ]);
+
+        $this->actingAs($manager)->delete(route('manager.assignments.destroy', $assignment))
+            ->assertRedirect(route('manager.assignments.index'));
+
+        $this->assertDatabaseMissing('assignments', ['id' => $assignment->id]);
+    }
+
+    public function test_manager_can_grade_a_submission(): void
+    {
+        $program = \App\Models\Program::factory()->create(['name' => 'Test Prog']);
+        $level = \App\Models\Level::factory()->create(['program_id' => $program->id, 'name' => 'Test Level']);
+        $class = CourseClass::factory()->create(['level_id' => $level->id, 'name' => 'Test Class']);
+        $eleve = User::factory()->create();
+        $eleve->assignRole('student');
+        $class->users()->attach($eleve->id, ['role' => 'student']);
+
+        $coach = User::factory()->create();
+        $coach->assignRole('coach');
+
+        $assignment = \App\Models\Assignment::create([
+            'course_class_id' => $class->id,
+            'coach_id' => $coach->id,
+            'title' => 'Devoir a corriger',
+            'description' => 'Description',
+            'due_date' => now()->addDays(5),
+            'type' => 'text',
+        ]);
+
+        $submission = \App\Models\Submission::create([
+            'assignment_id' => $assignment->id,
+            'student_id' => $eleve->id,
+            'content_text' => 'Ma reponse',
+            'submitted_at' => now(),
+        ]);
+
+        $response = $this->actingAs($this->getManagerUser())->post(route('manager.evaluations.store', $submission), [
+            'score' => 15,
+            'feedback' => 'Bon travail',
+        ]);
+
+        $response->assertRedirect();
+        $this->assertDatabaseHas('grades', [
+            'submission_id' => $submission->id,
+            'score' => 15,
+        ]);
+    }
 }

@@ -107,6 +107,13 @@ Route::middleware(['auth', 'role:manager|admin'])->prefix('manager')->name('mana
         // Reglement groupe : evite de repeter le meme clic sur chaque ligne.
         Route::post('payments/pay-many', [\App\Http\Controllers\Manager\PaymentController::class, 'markManyAsPaid'])->name('payments.payMany');
     });
+
+    // Evaluations : controle complet de la gestionnaire sur tout le cycle
+    // de vie (creation, attribution, correction), y compris sur les
+    // evaluations creees par un coach (point 1, fiche du 27/08/2026).
+    Route::resource('assignments', \App\Http\Controllers\Manager\AssignmentController::class)->except(['show']);
+    Route::get('/assignments/{assignment}/submissions', [\App\Http\Controllers\Manager\EvaluationController::class, 'index'])->name('evaluations.index');
+    Route::post('/submissions/{submission}/evaluate', [\App\Http\Controllers\Manager\EvaluationController::class, 'store'])->name('evaluations.store');
 });
 
 // Coach Routes

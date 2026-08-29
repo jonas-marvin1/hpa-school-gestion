@@ -57,6 +57,37 @@ class StudentTest extends TestCase
         $response->assertStatus(200);
     }
 
+    public function test_student_only_sees_nominative_assignment_addressed_to_them(): void
+    {
+        $eleveVise = $this->getStudentUser();
+        $autreEleve = $this->getStudentUser();
+        $program = \App\Models\Program::factory()->create(['name' => 'Program 1']);
+        $level = \App\Models\Level::factory()->create(['program_id' => $program->id, 'name' => 'Level 1']);
+        $class = \App\Models\CourseClass::factory()->create(['level_id' => $level->id, 'name' => 'Class 1']);
+        $class->users()->attach($eleveVise->id, ['role' => 'student']);
+        $class->users()->attach($autreEleve->id, ['role' => 'student']);
+
+        $coach = User::factory()->create();
+        $coach->assignRole('coach');
+
+        $assignment = \App\Models\Assignment::factory()->create([
+            'course_class_id' => $class->id,
+            'student_id' => $eleveVise->id,
+            'coach_id' => $coach->id,
+            'title' => 'Devoir individuel',
+            'type' => 'text',
+        ]);
+
+        $this->actingAs($eleveVise)->get(route('student.assignments.index'))->assertSee('Devoir individuel');
+        $this->actingAs($eleveVise)->get(route('student.assignments.show', $assignment))->assertStatus(200);
+
+        $this->actingAs($autreEleve)->get(route('student.assignments.index'))->assertDontSee('Devoir individuel');
+        // Acces direct par URL : sans ce controle, l'autre apprenant y
+        // accederait malgre l'absence de l'index (point de vigilance de la
+        // fiche du 27/08/2026).
+        $this->actingAs($autreEleve)->get(route('student.assignments.show', $assignment))->assertStatus(403);
+    }
+
     public function test_student_can_submit_assignment(): void
     {
         $student = $this->getStudentUser();

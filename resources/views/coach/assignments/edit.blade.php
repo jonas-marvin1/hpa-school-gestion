@@ -25,23 +25,19 @@
                         @method('PUT')
                         
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            
+
                             <!-- Titre -->
                             <div class="md:col-span-2">
                                 <label for="title" class="block text-sm font-medium text-gray-700">Titre du devoir *</label>
                                 <input type="text" name="title" id="title" value="{{ old('title', $assignment->title) }}" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
                             </div>
 
-                            <!-- Classe -->
-                            <div>
-                                <label for="course_class_id" class="block text-sm font-medium text-gray-700">Classe cible *</label>
-                                <select name="course_class_id" id="course_class_id" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
-                                    <option value="">Sélectionnez une classe</option>
-                                    @foreach($classes as $class)
-                                        <option value="{{ $class->id }}" {{ old('course_class_id', $assignment->course_class_id) == $class->id ? 'selected' : '' }}>{{ $class->name }}</option>
-                                    @endforeach
-                                </select>
-                            </div>
+                            <!-- Classe et apprenant -->
+                            <x-classe-apprenant-select
+                                :classes="$classes"
+                                :selected-class="old('course_class_id', $assignment->course_class_id)"
+                                :selected-student="old('student_id', $assignment->student_id)"
+                            />
 
                             <!-- Type -->
                             <div>
