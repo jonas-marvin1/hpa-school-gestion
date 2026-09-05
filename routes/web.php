@@ -106,6 +106,9 @@ Route::middleware(['auth', 'role:manager|admin'])->prefix('manager')->name('mana
         Route::post('payments/{payment}/pay', [\App\Http\Controllers\Manager\PaymentController::class, 'markAsPaid'])->name('payments.pay');
         // Reglement groupe : evite de repeter le meme clic sur chaque ligne.
         Route::post('payments/pay-many', [\App\Http\Controllers\Manager\PaymentController::class, 'markManyAsPaid'])->name('payments.payMany');
+        // Suppression groupee : meme convention que pay-many, un suffixe qui
+        // ne peut pas etre capture par la route GET payments/{payment}.
+        Route::post('payments/delete-many', [\App\Http\Controllers\Manager\PaymentController::class, 'destroyMany'])->name('payments.destroyMany');
     });
 
     // Evaluations : controle complet de la gestionnaire sur tout le cycle

@@ -13,6 +13,7 @@ use App\Services\AnneesDisponibles;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class PaymentController extends Controller
 {
@@ -221,5 +222,57 @@ class PaymentController extends Controller
         $payment->delete();
 
         return redirect()->route('manager.payments.index')->with('status', 'Fiche de paie supprimée avec succès. La session est à nouveau disponible pour facturation.');
+    }
+
+    /**
+     * Supprime plusieurs fiches en une seule operation.
+     *
+     * Seules les fiches en attente ou annulees sont supprimees : supprimer
+     * une fiche delie ses sessions (elles redeviennent facturables), et le
+     * faire en masse sur des fiches deja payees ouvrirait la porte a un
+     * double paiement. La suppression d'une fiche payee reste possible a
+     * l'unite via destroy(), un geste volontaire et isole.
+     */
+    public function destroyMany(Request $request)
+    {
+        $valide = $request->validate([
+            'payment_ids'   => 'required|array|min:1',
+            'payment_ids.*' => 'integer|exists:payments,id',
+        ], [
+            'payment_ids.required' => 'Sélectionnez au moins une fiche à supprimer.',
+        ]);
+
+        $aSupprimer = Payment::whereIn('id', $valide['payment_ids'])
+            ->whereIn('status', ['pending', 'cancelled'])
+            ->get();
+
+        $supprimees = $aSupprimer->count();
+        $ignorees = count($valide['payment_ids']) - $supprimees;
+
+        // Deliaison des sessions et suppression dans la meme transaction :
+        // un echec en cours de route ne doit pas laisser des sessions
+        // deliees sans que la fiche correspondante ait disparu.
+        DB::transaction(function () use ($aSupprimer) {
+            foreach ($aSupprimer as $payment) {
+                $payment->sessions()->update(['payment_id' => null]);
+                $payment->delete();
+            }
+        });
+
+        if ($supprimees === 0) {
+            $message = 'Aucune fiche supprimée : la sélection ne contenait que des fiches payées.';
+        } else {
+            $message = sprintf('%d fiche%s supprimée%s.', $supprimees, $supprimees > 1 ? 's' : '', $supprimees > 1 ? 's' : '');
+            if ($ignorees > 0) {
+                $message .= sprintf(
+                    ' %d fiche%s payée%s ignorée%s : supprimez-les une par une si nécessaire.',
+                    $ignorees, $ignorees > 1 ? 's' : '', $ignorees > 1 ? 's' : '', $ignorees > 1 ? 's' : ''
+                );
+            }
+        }
+
+        // back() plutot que route('manager.payments.index') : ramene sur la
+        // liste filtree d'ou vient l'action, comme markManyAsPaid().
+        return redirect()->back()->with('status', $message);
     }
 }

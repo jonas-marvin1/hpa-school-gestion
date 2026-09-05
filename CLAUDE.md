@@ -45,7 +45,16 @@ Pièges déjà rencontrés, à ne pas rechercher une seconde fois :
 - l'application s'ouvre par l'onglet **Ports** du Codespace, jamais par
   `localhost:8000` ;
 - tuer `artisan serve` ne suffit pas, le processus enfant `server.php`
-  survit et garde le port 8000.
+  survit et garde le port 8000 ;
+- Alpine.js compile `@submit`/`@click` comme une **expression**, pas comme
+  un corps de fonction : `@submit="return confirm(...)"` est donc invalide
+  (le `return` en tête), Alpine l'ignore silencieusement et l'action part
+  sans confirmation. Écrire `@submit.prevent="if (confirm(...)) $el.submit()"`.
+- dans Alpine, `$el` est l'élément sur lequel l'expression courante est
+  évaluée (pas la racine du composant), `$root` est la racine du composant
+  `x-data` : tout parcours du DOM depuis un composant (`querySelectorAll`,
+  etc.) doit partir de `$root`, sinon un `@change`/`@click` posé sur un
+  élément différent de la racine cherche au mauvais endroit sans erreur.
 
 ## Déploiement et sauvegardes
 

@@ -131,32 +131,74 @@
                             @if($payments->hasPages())
                                 <span class="text-gray-400">— page {{ $payments->currentPage() }} sur {{ $payments->lastPage() }}</span>
                             @endif
+                            @if($peutRegler)
+                                {{-- Portee de la case "tout selectionner" : la page
+                                     affichee, pas l'ensemble du filtre (delibere, cf.
+                                     fiche du 03/09/2026). Cette ligne a de la place et
+                                     n'impose aucune largeur au tableau, contrairement a
+                                     l'en-tete de colonne (cf. commentaire sur cette
+                                     cellule plus bas). --}}
+                                <span class="text-gray-400">— La case en tête de tableau sélectionne les {{ $payments->count() }} fiche{{ $payments->count() > 1 ? 's' : '' }} de cette page.</span>
+                            @endif
                         </p>
                     </div>
 
                     @if($peutRegler)
                     {{-- Barre d'action groupee : n'apparait qu'une fois une fiche
-                         cochee, pour ne pas encombrer l'ecran le reste du temps. --}}
+                         cochee, pour ne pas encombrer l'ecran le reste du temps.
+                         Le contenu s'adapte a la composition de la selection. --}}
                     <div x-show="nbSelection > 0" x-cloak
                          class="flex flex-wrap items-center justify-between gap-3 mb-4 rounded-md border border-indigo-200 bg-indigo-50 px-4 py-3">
                         <p class="text-sm text-indigo-900">
                             <span class="font-semibold" x-text="nbSelection"></span>
                             <span x-text="nbSelection > 1 ? 'fiches sélectionnées' : 'fiche sélectionnée'"></span>
-                            <span class="text-indigo-700">— total <span class="font-semibold" x-text="montantFormate"></span> FCFA</span>
+                            {{-- Le montant ne porte que sur les fiches en attente : c'est
+                                 la seule chose que le bouton "Regler" ci-dessous facture
+                                 reellement, les fiches payees/annulees n'y entrent pas. --}}
+                            <span class="text-indigo-700">— <span x-text="nbEnAttente"></span> en attente pour <span class="font-semibold" x-text="montantFormate"></span> FCFA</span>
                         </p>
                         <div class="flex items-center gap-3">
                             <button type="button" @click="toutDecocher()" class="text-sm text-indigo-700 hover:underline">Tout désélectionner</button>
+
+                            {{-- Le reglement ne porte que sur les fiches en attente de la
+                                 selection : les autres statuts n'ont rien a regler. --}}
+                            {{-- Alpine compile @submit comme une expression, pas comme un
+                                 corps de fonction : un "return" en tete la rend invalide,
+                                 Alpine l'ignore silencieusement et le formulaire part sans
+                                 confirmation. Il faut .prevent (la valeur de retour de
+                                 l'expression n'est jamais lue) puis soumettre nous-memes
+                                 via $el.submit() si l'utilisateur confirme. --}}
                             <form method="POST" action="{{ route('manager.payments.payMany') }}"
-                                  @submit="return confirm('Confirmer le règlement de ' + nbSelection + ' fiche(s) ?')">
+                                  @submit.prevent="if (confirm('Confirmer le règlement de ' + nbEnAttente + ' fiche(s) ?')) $el.submit()">
                                 @csrf
                                 {{-- Les identifiants sont injectes ici plutot que dans le
                                      tableau : imbriquer un formulaire dans un autre serait
                                      invalide, les lignes ayant deja leurs propres formulaires. --}}
-                                <template x-for="id in selection" :key="id">
+                                <template x-for="id in idsEnAttente" :key="id">
                                     <input type="hidden" name="payment_ids[]" :value="id">
                                 </template>
-                                <button type="submit" class="inline-flex items-center px-4 py-2 bg-indigo-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700">
-                                    Marquer comme réglées
+                                <button type="submit" :disabled="nbEnAttente === 0"
+                                        :class="nbEnAttente === 0 ? 'bg-indigo-300 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'"
+                                        class="inline-flex items-center px-4 py-2 text-white rounded-md text-sm font-medium">
+                                    <span x-text="'Régler ' + nbEnAttente + (nbEnAttente > 1 ? ' fiches en attente' : ' fiche en attente')"></span>
+                                </button>
+                            </form>
+
+                            {{-- Suppression groupee : les fiches payees de la selection
+                                 sont ignorees cote serveur (cf. PaymentController::destroyMany).
+                                 Le bouton est desactive si la selection n'en contient aucune
+                                 autre, pour ne pas envoyer une requete sans effet. Meme
+                                 piege Alpine que ci-dessus : .prevent + $el.submit(). --}}
+                            <form method="POST" action="{{ route('manager.payments.destroyMany') }}"
+                                  @submit.prevent="if (confirm(messageConfirmationSuppression())) $el.submit()">
+                                @csrf
+                                <template x-for="id in idsSupprimables" :key="id">
+                                    <input type="hidden" name="payment_ids[]" :value="id">
+                                </template>
+                                <button type="submit" :disabled="nbSupprimables === 0"
+                                        :class="nbSupprimables === 0 ? 'bg-red-300 cursor-not-allowed' : 'bg-red-600 hover:bg-red-700'"
+                                        class="inline-flex items-center px-4 py-2 text-white rounded-md text-sm font-medium">
+                                    <span x-text="'Supprimer ' + nbSupprimables + (nbSupprimables > 1 ? ' fiches' : ' fiche')"></span>
                                 </button>
                             </form>
                         </div>
@@ -169,10 +211,22 @@
                             <tr class="bg-gray-50 text-gray-600">
                                 @if($peutRegler)
                                 <th class="border-b py-3 px-4 w-10">
+                                    {{-- Le libelle "Tout selectionner (N fiches...)" a ete
+                                         retire d'ici : place dans cette cellule, il portait
+                                         la premiere colonne a 357px et faisait deborder le
+                                         tableau de 302px (mesure a 1280/1366/1536/1920px de
+                                         large, le conteneur etant plafonne par max-w-7xl), ce
+                                         qui tronquait la colonne Montant et poussait Action
+                                         hors ecran. Sans lui la colonne retombe a 52px. Le
+                                         texte vit maintenant dans la ligne de comptage
+                                         au-dessus du tableau, qui n'impose aucune largeur de
+                                         colonne ; title et aria-label gardent l'information
+                                         accessible depuis la case elle-meme. --}}
                                     <input type="checkbox" @change="toutCocher($event.target.checked)"
                                            :checked="toutesCochees" :indeterminate="nbSelection > 0 && !toutesCochees"
                                            class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                                           title="Tout sélectionner (fiches en attente)">
+                                           title="Tout sélectionner (fiches de cette page)"
+                                           aria-label="Tout sélectionner : les {{ $payments->count() }} fiche{{ $payments->count() > 1 ? 's' : '' }} de cette page">
                                 </th>
                                 @endif
                                 <th class="border-b py-3 px-4 font-semibold uppercase tracking-wider">Date</th>
@@ -194,15 +248,15 @@
                                 <tr class="hover:bg-gray-50" :class="estSelectionnee({{ $payment->id }}) && 'bg-indigo-50'">
                                     @if($peutRegler)
                                     <td class="border-b py-3 px-4">
-                                        @if($payment->status === 'pending')
-                                            {{-- Seules les fiches en attente sont selectionnables :
-                                                 une fiche deja reglee n'a rien a repayer. --}}
-                                            <input type="checkbox" value="{{ $payment->id }}"
-                                                   data-fiche data-montant="{{ (float) $payment->total_amount }}"
-                                                   @change="basculer({{ $payment->id }}, {{ (float) $payment->total_amount }}, $event.target.checked)"
-                                                   :checked="estSelectionnee({{ $payment->id }})"
-                                                   class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
-                                        @endif
+                                        {{-- Toutes les lignes sont selectionnables, quel que soit
+                                             le statut : le statut de chaque fiche est porte par
+                                             data-statut, pour que la barre d'action groupee sache
+                                             ce qui est reglable et ce qui est supprimable. --}}
+                                        <input type="checkbox" value="{{ $payment->id }}"
+                                               data-fiche data-montant="{{ (float) $payment->total_amount }}" data-statut="{{ $payment->status }}"
+                                               @change="basculer({{ $payment->id }}, {{ (float) $payment->total_amount }}, '{{ $payment->status }}', $event.target.checked)"
+                                               :checked="estSelectionnee({{ $payment->id }})"
+                                               class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
                                     </td>
                                     @endif
                                     <td class="border-b py-3 px-4">
@@ -281,19 +335,29 @@
             return {
                 selection: [],
                 montants: {},
+                statuts: {},
 
                 get nbSelection() { return this.selection.length; },
 
+                // Uniquement les fiches en attente : c'est la seule chose que le
+                // bouton "Regler" facture reellement, les fiches payees/annulees
+                // de la selection ne doivent pas gonfler ce montant.
                 get montantTotal() {
-                    return this.selection.reduce((s, id) => s + (this.montants[id] || 0), 0);
+                    return this.idsEnAttente.reduce((s, id) => s + (this.montants[id] || 0), 0);
                 },
 
                 get montantFormate() {
                     return new Intl.NumberFormat('fr-FR').format(Math.round(this.montantTotal));
                 },
 
+                // $root et non $el : $el designe l'element sur lequel l'expression
+                // courante est evaluee (la case cochee elle-meme pour un @change
+                // dans l'en-tete), alors que $root est la racine du composant
+                // x-data. Avec $el, "Tout selectionner" ne trouvait aucune ligne
+                // et ne faisait rien, sans erreur visible (bug en production
+                // depuis la livraison du 13/08/2026, cf. docs/fiches/2026-09-03.md).
                 get cochables() {
-                    return Array.from(this.$el.querySelectorAll('[data-fiche]'));
+                    return Array.from(this.$root.querySelectorAll('[data-fiche]'));
                 },
 
                 get toutesCochees() {
@@ -301,13 +365,43 @@
                     return n > 0 && this.selection.length === n;
                 },
 
+                // Decompte par statut, utilise par la barre d'action groupee pour
+                // savoir combien de fiches selectionnees sont reglables (pending)
+                // ou supprimables (pending + cancelled) : une fiche payee n'entre
+                // dans aucun des deux, cf. PaymentController::destroyMany.
+                get idsEnAttente() {
+                    return this.selection.filter(id => this.statuts[id] === 'pending');
+                },
+
+                get idsAnnulees() {
+                    return this.selection.filter(id => this.statuts[id] === 'cancelled');
+                },
+
+                get idsSupprimables() {
+                    return this.selection.filter(id => this.statuts[id] === 'pending' || this.statuts[id] === 'cancelled');
+                },
+
+                get nbEnAttente() { return this.idsEnAttente.length; },
+                get nbAnnulees() { return this.idsAnnulees.length; },
+                get nbSupprimables() { return this.idsSupprimables.length; },
+
+                messageConfirmationSuppression() {
+                    const n = this.nbSupprimables;
+                    const attente = this.nbEnAttente;
+                    const annulees = this.nbAnnulees;
+                    return 'Supprimer ' + n + (n > 1 ? ' fiches' : ' fiche')
+                        + ' (' + attente + ' en attente, ' + annulees + (annulees > 1 ? ' annulées' : ' annulée') + ') ?'
+                        + ' Les sessions correspondantes redeviendront facturables.';
+                },
+
                 estSelectionnee(id) { return this.selection.includes(id); },
 
-                basculer(id, montant, coche) {
+                basculer(id, montant, statut, coche) {
                     if (coche) {
                         if (!this.selection.includes(id)) {
                             this.selection.push(id);
                             this.montants[id] = montant;
+                            this.statuts[id] = statut;
                         }
                     } else {
                         this.selection = this.selection.filter(i => i !== id);
@@ -317,7 +411,7 @@
                 toutCocher(etat) {
                     this.cochables.forEach(c => {
                         const id = parseInt(c.value, 10);
-                        this.basculer(id, parseFloat(c.dataset.montant) || 0, etat);
+                        this.basculer(id, parseFloat(c.dataset.montant) || 0, c.dataset.statut, etat);
                         c.checked = etat;
                     });
                 },

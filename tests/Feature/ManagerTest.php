@@ -27,6 +27,13 @@ class ManagerTest extends TestCase
         return $manager;
     }
 
+    private function getAdminUser()
+    {
+        $admin = User::factory()->create();
+        $admin->assignRole('admin');
+        return $admin;
+    }
+
     public function test_manager_can_access_dashboard(): void
     {
         $response = $this->actingAs($this->getManagerUser())->get(route('manager.dashboard'));
@@ -266,6 +273,116 @@ class ManagerTest extends TestCase
         ]);
 
         $response->assertRedirect(route('manager.payments.index'));
+    }
+
+    public function test_admin_can_delete_many_pending_and_cancelled_payments(): void
+    {
+        $program = \App\Models\Program::factory()->create(['name' => 'Prog Suppression']);
+        $level = \App\Models\Level::factory()->create(['program_id' => $program->id, 'name' => 'Level Suppression']);
+        $class = CourseClass::factory()->create(['level_id' => $level->id, 'name' => 'Classe Suppression']);
+        $coach = User::factory()->create();
+        $coach->assignRole('coach');
+
+        $pending = Payment::factory()->create([
+            'coach_id' => $coach->id, 'status' => 'pending',
+            'month' => now()->month, 'year' => now()->year,
+            'total_sessions' => 1, 'total_amount' => 500,
+        ]);
+        $cancelled = Payment::factory()->create([
+            'coach_id' => $coach->id, 'status' => 'cancelled',
+            'month' => now()->month, 'year' => now()->year,
+            'total_sessions' => 1, 'total_amount' => 500,
+        ]);
+
+        $sessionPending = ClassSession::factory()->create([
+            'course_class_id' => $class->id,
+            'coach_id' => $coach->id,
+            'payment_id' => $pending->id,
+            'start_time' => now(),
+            'end_time' => now()->addHours(2),
+            'status' => 'validated',
+            'intervention_type' => 'in_person',
+            'amount' => 500,
+        ]);
+        $sessionCancelled = ClassSession::factory()->create([
+            'course_class_id' => $class->id,
+            'coach_id' => $coach->id,
+            'payment_id' => $cancelled->id,
+            'start_time' => now(),
+            'end_time' => now()->addHours(2),
+            'status' => 'validated',
+            'intervention_type' => 'in_person',
+            'amount' => 500,
+        ]);
+
+        // Retour attendu sur la liste filtree d'ou vient l'action (point 3
+        // de la correction du 03/09/2026), simulee ici via le referer.
+        $filtre = route('manager.payments.index', ['status' => 'cancelled']);
+
+        $response = $this->actingAs($this->getAdminUser())->from($filtre)->post(route('manager.payments.destroyMany'), [
+            'payment_ids' => [$pending->id, $cancelled->id],
+        ]);
+
+        $response->assertRedirect($filtre);
+        $this->assertDatabaseMissing('payments', ['id' => $pending->id]);
+        $this->assertDatabaseMissing('payments', ['id' => $cancelled->id]);
+        $this->assertNull($sessionPending->fresh()->payment_id);
+        $this->assertNull($sessionCancelled->fresh()->payment_id);
+    }
+
+    public function test_admin_deleting_many_payments_ignores_paid_ones(): void
+    {
+        $coach = User::factory()->create();
+        $coach->assignRole('coach');
+
+        $pending = Payment::factory()->create([
+            'coach_id' => $coach->id, 'status' => 'pending',
+            'month' => now()->month, 'year' => now()->year,
+            'total_sessions' => 1, 'total_amount' => 500,
+        ]);
+        $paid = Payment::factory()->create([
+            'coach_id' => $coach->id, 'status' => 'paid',
+            'month' => now()->month, 'year' => now()->year,
+            'total_sessions' => 1, 'total_amount' => 500,
+        ]);
+
+        $filtre = route('manager.payments.index', ['status' => 'pending']);
+
+        $response = $this->actingAs($this->getAdminUser())->from($filtre)->post(route('manager.payments.destroyMany'), [
+            'payment_ids' => [$pending->id, $paid->id],
+        ]);
+
+        $response->assertRedirect($filtre);
+        $response->assertSessionHas('status');
+        $this->assertStringContainsString('payée', session('status'));
+        $this->assertDatabaseMissing('payments', ['id' => $pending->id]);
+        $this->assertDatabaseHas('payments', ['id' => $paid->id]);
+    }
+
+    public function test_manager_cannot_delete_many_payments(): void
+    {
+        $coach = User::factory()->create();
+        $coach->assignRole('coach');
+        $payment = Payment::factory()->create([
+            'coach_id' => $coach->id, 'status' => 'pending',
+            'month' => now()->month, 'year' => now()->year,
+            'total_sessions' => 1, 'total_amount' => 500,
+        ]);
+
+        $response = $this->actingAs($this->getManagerUser())->post(route('manager.payments.destroyMany'), [
+            'payment_ids' => [$payment->id],
+        ]);
+
+        $response->assertStatus(403);
+        $this->assertDatabaseHas('payments', ['id' => $payment->id]);
+    }
+
+    public function test_delete_many_payments_requires_payment_ids(): void
+    {
+        $response = $this->actingAs($this->getAdminUser())->post(route('manager.payments.destroyMany'), []);
+
+        $response->assertSessionHasErrors('payment_ids');
+        $this->assertDatabaseCount('payments', 0);
     }
 
     public function test_manager_can_create_assignment_for_whole_class(): void
