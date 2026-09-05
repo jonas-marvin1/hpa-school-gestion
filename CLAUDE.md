@@ -45,7 +45,11 @@ Pièges déjà rencontrés, à ne pas rechercher une seconde fois :
 - l'application s'ouvre par l'onglet **Ports** du Codespace, jamais par
   `localhost:8000` ;
 - tuer `artisan serve` ne suffit pas, le processus enfant `server.php`
-  survit et garde le port 8000.
+  survit et garde le port 8000 ;
+- Alpine.js compile `@submit`/`@click` comme une **expression**, pas comme
+  un corps de fonction : `@submit="return confirm(...)"` est donc invalide
+  (le `return` en tête), Alpine l'ignore silencieusement et l'action part
+  sans confirmation. Écrire `@submit.prevent="if (confirm(...)) $el.submit()"`.
 
 ## Déploiement et sauvegardes
 

@@ -143,15 +143,24 @@
                         <p class="text-sm text-indigo-900">
                             <span class="font-semibold" x-text="nbSelection"></span>
                             <span x-text="nbSelection > 1 ? 'fiches sélectionnées' : 'fiche sélectionnée'"></span>
-                            <span class="text-indigo-700">— total <span class="font-semibold" x-text="montantFormate"></span> FCFA</span>
+                            {{-- Le montant ne porte que sur les fiches en attente : c'est
+                                 la seule chose que le bouton "Regler" ci-dessous facture
+                                 reellement, les fiches payees/annulees n'y entrent pas. --}}
+                            <span class="text-indigo-700">— <span x-text="nbEnAttente"></span> en attente pour <span class="font-semibold" x-text="montantFormate"></span> FCFA</span>
                         </p>
                         <div class="flex items-center gap-3">
                             <button type="button" @click="toutDecocher()" class="text-sm text-indigo-700 hover:underline">Tout désélectionner</button>
 
                             {{-- Le reglement ne porte que sur les fiches en attente de la
                                  selection : les autres statuts n'ont rien a regler. --}}
+                            {{-- Alpine compile @submit comme une expression, pas comme un
+                                 corps de fonction : un "return" en tete la rend invalide,
+                                 Alpine l'ignore silencieusement et le formulaire part sans
+                                 confirmation. Il faut .prevent (la valeur de retour de
+                                 l'expression n'est jamais lue) puis soumettre nous-memes
+                                 via $el.submit() si l'utilisateur confirme. --}}
                             <form method="POST" action="{{ route('manager.payments.payMany') }}"
-                                  @submit="return confirm('Confirmer le règlement de ' + nbEnAttente + ' fiche(s) ?')">
+                                  @submit.prevent="if (confirm('Confirmer le règlement de ' + nbEnAttente + ' fiche(s) ?')) $el.submit()">
                                 @csrf
                                 {{-- Les identifiants sont injectes ici plutot que dans le
                                      tableau : imbriquer un formulaire dans un autre serait
@@ -169,9 +178,10 @@
                             {{-- Suppression groupee : les fiches payees de la selection
                                  sont ignorees cote serveur (cf. PaymentController::destroyMany).
                                  Le bouton est desactive si la selection n'en contient aucune
-                                 autre, pour ne pas envoyer une requete sans effet. --}}
+                                 autre, pour ne pas envoyer une requete sans effet. Meme
+                                 piege Alpine que ci-dessus : .prevent + $el.submit(). --}}
                             <form method="POST" action="{{ route('manager.payments.destroyMany') }}"
-                                  @submit="return confirm(messageConfirmationSuppression())">
+                                  @submit.prevent="if (confirm(messageConfirmationSuppression())) $el.submit()">
                                 @csrf
                                 <template x-for="id in idsSupprimables" :key="id">
                                     <input type="hidden" name="payment_ids[]" :value="id">
@@ -314,8 +324,11 @@
 
                 get nbSelection() { return this.selection.length; },
 
+                // Uniquement les fiches en attente : c'est la seule chose que le
+                // bouton "Regler" facture reellement, les fiches payees/annulees
+                // de la selection ne doivent pas gonfler ce montant.
                 get montantTotal() {
-                    return this.selection.reduce((s, id) => s + (this.montants[id] || 0), 0);
+                    return this.idsEnAttente.reduce((s, id) => s + (this.montants[id] || 0), 0);
                 },
 
                 get montantFormate() {

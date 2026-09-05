@@ -315,11 +315,15 @@ class ManagerTest extends TestCase
             'amount' => 500,
         ]);
 
-        $response = $this->actingAs($this->getAdminUser())->post(route('manager.payments.destroyMany'), [
+        // Retour attendu sur la liste filtree d'ou vient l'action (point 3
+        // de la correction du 03/09/2026), simulee ici via le referer.
+        $filtre = route('manager.payments.index', ['status' => 'cancelled']);
+
+        $response = $this->actingAs($this->getAdminUser())->from($filtre)->post(route('manager.payments.destroyMany'), [
             'payment_ids' => [$pending->id, $cancelled->id],
         ]);
 
-        $response->assertRedirect(route('manager.payments.index'));
+        $response->assertRedirect($filtre);
         $this->assertDatabaseMissing('payments', ['id' => $pending->id]);
         $this->assertDatabaseMissing('payments', ['id' => $cancelled->id]);
         $this->assertNull($sessionPending->fresh()->payment_id);
@@ -342,11 +346,13 @@ class ManagerTest extends TestCase
             'total_sessions' => 1, 'total_amount' => 500,
         ]);
 
-        $response = $this->actingAs($this->getAdminUser())->post(route('manager.payments.destroyMany'), [
+        $filtre = route('manager.payments.index', ['status' => 'pending']);
+
+        $response = $this->actingAs($this->getAdminUser())->from($filtre)->post(route('manager.payments.destroyMany'), [
             'payment_ids' => [$pending->id, $paid->id],
         ]);
 
-        $response->assertRedirect(route('manager.payments.index'));
+        $response->assertRedirect($filtre);
         $response->assertSessionHas('status');
         $this->assertStringContainsString('payée', session('status'));
         $this->assertDatabaseMissing('payments', ['id' => $pending->id]);

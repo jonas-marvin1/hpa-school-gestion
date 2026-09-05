@@ -271,6 +271,8 @@ class PaymentController extends Controller
             }
         }
 
-        return redirect()->route('manager.payments.index')->with('status', $message);
+        // back() plutot que route('manager.payments.index') : ramene sur la
+        // liste filtree d'ou vient l'action, comme markManyAsPaid().
+        return redirect()->back()->with('status', $message);
     }
 }
