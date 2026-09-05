@@ -131,6 +131,15 @@
                             @if($payments->hasPages())
                                 <span class="text-gray-400">— page {{ $payments->currentPage() }} sur {{ $payments->lastPage() }}</span>
                             @endif
+                            @if($peutRegler)
+                                {{-- Portee de la case "tout selectionner" : la page
+                                     affichee, pas l'ensemble du filtre (delibere, cf.
+                                     fiche du 03/09/2026). Cette ligne a de la place et
+                                     n'impose aucune largeur au tableau, contrairement a
+                                     l'en-tete de colonne (cf. commentaire sur cette
+                                     cellule plus bas). --}}
+                                <span class="text-gray-400">— La case en tête de tableau sélectionne les {{ $payments->count() }} fiche{{ $payments->count() > 1 ? 's' : '' }} de cette page.</span>
+                            @endif
                         </p>
                     </div>
 
@@ -201,17 +210,23 @@
                         <thead>
                             <tr class="bg-gray-50 text-gray-600">
                                 @if($peutRegler)
-                                <th class="border-b py-3 px-4">
-                                    <label class="flex items-center gap-2 font-normal normal-case tracking-normal cursor-pointer">
-                                        <input type="checkbox" @change="toutCocher($event.target.checked)"
-                                               :checked="toutesCochees" :indeterminate="nbSelection > 0 && !toutesCochees"
-                                               class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                                               title="Tout sélectionner (fiches de cette page)">
-                                        {{-- Libelle visible en plus du titre : la portee est
-                                             la page affichee, pas l'ensemble du filtre
-                                             (delibere, cf. fiche du 03/09/2026). --}}
-                                        <span class="text-gray-500">Tout sélectionner ({{ $payments->count() }} fiche{{ $payments->count() > 1 ? 's' : '' }} de cette page)</span>
-                                    </label>
+                                <th class="border-b py-3 px-4 w-10">
+                                    {{-- Le libelle "Tout selectionner (N fiches...)" a ete
+                                         retire d'ici : place dans cette cellule, il portait
+                                         la premiere colonne a 357px et faisait deborder le
+                                         tableau de 302px (mesure a 1280/1366/1536/1920px de
+                                         large, le conteneur etant plafonne par max-w-7xl), ce
+                                         qui tronquait la colonne Montant et poussait Action
+                                         hors ecran. Sans lui la colonne retombe a 52px. Le
+                                         texte vit maintenant dans la ligne de comptage
+                                         au-dessus du tableau, qui n'impose aucune largeur de
+                                         colonne ; title et aria-label gardent l'information
+                                         accessible depuis la case elle-meme. --}}
+                                    <input type="checkbox" @change="toutCocher($event.target.checked)"
+                                           :checked="toutesCochees" :indeterminate="nbSelection > 0 && !toutesCochees"
+                                           class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                           title="Tout sélectionner (fiches de cette page)"
+                                           aria-label="Tout sélectionner : les {{ $payments->count() }} fiche{{ $payments->count() > 1 ? 's' : '' }} de cette page">
                                 </th>
                                 @endif
                                 <th class="border-b py-3 px-4 font-semibold uppercase tracking-wider">Date</th>
