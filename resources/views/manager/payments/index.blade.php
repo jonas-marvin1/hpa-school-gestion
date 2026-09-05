@@ -335,8 +335,14 @@
                     return new Intl.NumberFormat('fr-FR').format(Math.round(this.montantTotal));
                 },
 
+                // $root et non $el : $el designe l'element sur lequel l'expression
+                // courante est evaluee (la case cochee elle-meme pour un @change
+                // dans l'en-tete), alors que $root est la racine du composant
+                // x-data. Avec $el, "Tout selectionner" ne trouvait aucune ligne
+                // et ne faisait rien, sans erreur visible (bug en production
+                // depuis la livraison du 13/08/2026, cf. docs/fiches/2026-09-03.md).
                 get cochables() {
-                    return Array.from(this.$el.querySelectorAll('[data-fiche]'));
+                    return Array.from(this.$root.querySelectorAll('[data-fiche]'));
                 },
 
                 get toutesCochees() {
