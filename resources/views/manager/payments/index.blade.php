@@ -50,7 +50,8 @@
             <!-- Advanced Search Filters -->
             <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg mb-6">
                 <div class="p-6 text-gray-900">
-                    <form method="GET" action="{{ route('manager.payments.index') }}" class="grid grid-cols-1 md:grid-cols-7 gap-4">
+                    <form method="GET" action="{{ route('manager.payments.index') }}">
+                    <div class="grid grid-cols-1 md:grid-cols-6 gap-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700">Recherche (Nom)</label>
                             <input type="text" name="search_coach" value="{{ request('search_coach') }}" placeholder="Rechercher formateur..." class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
@@ -106,12 +107,20 @@
                                 @endforeach
                             </select>
                         </div>
-                        <div class="flex items-end space-x-2">
-                            <button type="submit" class="w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">Filtrer</button>
-                            <a href="{{ route('manager.payments.index') }}" class="w-full bg-gray-200 text-gray-800 px-4 py-2 rounded-md text-center hover:bg-gray-300">Réinitialiser</a>
-                            {{-- Exporte exactement les lignes filtrees affichees a l'ecran. --}}
-                            <a href="{{ route('manager.payments.export', request()->query()) }}" class="w-full bg-gray-200 text-gray-800 px-4 py-2 rounded-md text-center hover:bg-gray-300">Exporter (CSV)</a>
-                        </div>
+                    </div>
+                    {{-- Boutons volontairement hors de la grille : trois boutons dans
+                         une cellule d'un septieme (~190px pour ~350px de boutons)
+                         debordaient de leur cellule, et le overflow-hidden de la
+                         carte parente coupait ce debordement sans defilement
+                         possible — "Exporter (CSV)" etait inatteignable et
+                         "Reinitialiser" tronque. Une rangee dediee sous la grille
+                         leur laisse leur largeur naturelle. --}}
+                    <div class="mt-4 flex flex-wrap justify-end gap-2">
+                        <button type="submit" class="w-full sm:w-auto bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">Filtrer</button>
+                        <a href="{{ route('manager.payments.index') }}" class="w-full sm:w-auto bg-gray-200 text-gray-800 px-4 py-2 rounded-md text-center hover:bg-gray-300">Réinitialiser</a>
+                        {{-- Exporte exactement les lignes filtrees affichees a l'ecran. --}}
+                        <a href="{{ route('manager.payments.export', request()->query()) }}" class="w-full sm:w-auto bg-gray-200 text-gray-800 px-4 py-2 rounded-md text-center hover:bg-gray-300">Exporter (CSV)</a>
+                    </div>
                     </form>
                 </div>
             </div>
