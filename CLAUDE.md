@@ -111,7 +111,11 @@ nouveaux développements mêlés).
   n'a ni `node` ni `npm`, les assets ne peuvent pas y être compilés. Toute
   modification de CSS ou de classes Tailwind impose donc `npm run build` en
   local, puis un commit du résultat — sinon la production perd son apparence
-  au déploiement.
+  au déploiement. Cas concret : toute **nouvelle** classe Tailwind utilisée
+  dans une vue (par exemple `max-w-screen-2xl`, absente du CSS compilé tant
+  qu'aucune vue ne s'en servait) doit être suivie d'un `npm run build` et
+  d'un commit de `public/build` — sinon elle est silencieusement absente du
+  CSS livré, sans erreur ni avertissement.
 
 ## Service partagé
 

@@ -4,7 +4,7 @@
     </x-slot>
 
     <div class="py-12">
-        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
+        <div class="max-w-screen-2xl mx-auto sm:px-6 lg:px-8 space-y-6">
 
             {{-- Recapitulatif chiffre. Le detail de chaque rubrique vit dans sa
                  propre page : cet ecran sert a mesurer, pas a lister. Chaque

@@ -1,4 +1,4 @@
-<x-guest-layout>
+<x-guest-layout titre="Réinitialisation du mot de passe — HPA School Gestion">
     <form method="POST" action="{{ route('password.store') }}">
         @csrf
 

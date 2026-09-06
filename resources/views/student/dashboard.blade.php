@@ -6,7 +6,7 @@
     </x-slot>
 
     <div class="py-12">
-        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
+        <div class="max-w-screen-2xl mx-auto sm:px-6 lg:px-8 space-y-6">
 
             {{-- Alertes : echeance de paiement proche/depassee et devoirs a rendre. --}}
             <x-alertes-echeances />
