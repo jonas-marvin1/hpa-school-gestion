@@ -7,8 +7,11 @@
 
         {{-- Titre explicite, independant de config('app.name') : sa valeur
              en production n'est pas garantie, et c'est ce texte que
-             l'utilisateur voit dans son onglet et ses favoris. --}}
-        <title>Connexion — HPA School Gestion</title>
+             l'utilisateur voit dans son onglet et ses favoris. Parametrable
+             car ce layout est partage par toutes les pages d'authentification
+             (connexion, mot de passe oublie, inscription...) : un titre fixe
+             afficherait le meme intitule partout. --}}
+        <title>{{ $titre ?? 'HPA School Gestion' }}</title>
         <link rel="icon" type="image/png" href="{{ asset('images/logo.png') }}">
 
         <!-- Fonts -->

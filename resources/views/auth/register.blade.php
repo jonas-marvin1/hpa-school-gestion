@@ -1,4 +1,4 @@
-<x-guest-layout>
+<x-guest-layout titre="Inscription — HPA School Gestion">
     <form method="POST" action="{{ route('register') }}">
         @csrf
 
