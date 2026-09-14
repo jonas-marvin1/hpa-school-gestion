@@ -19,6 +19,16 @@
                 </div>
             @endif
 
+            @if ($errors->any())
+                <div class="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative">
+                    <ul>
+                        @foreach ($errors->all() as $error)
+                            <li>- {{ $error }}</li>
+                        @endforeach
+                    </ul>
+                </div>
+            @endif
+
             <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                 <div class="p-6 text-gray-900">
                     <x-search-bar placeholder="Rechercher par titre..." />
@@ -37,7 +47,7 @@
                         </thead>
                         <tbody>
                             @forelse($assignments as $assignment)
-                                <tr>
+                                <tr x-data="{ openProlonger: false }">
                                     <td class="border-b py-2 px-4 font-medium">{{ $assignment->title }}</td>
                                     <td class="border-b py-2 px-4">{{ $assignment->courseClass->name ?? 'N/A' }}</td>
                                     <td class="border-b py-2 px-4">{{ $assignment->student->name ?? 'Toute la classe' }}</td>
@@ -56,6 +66,13 @@
                                     </td>
                                     <td class="border-b py-2 px-4 flex items-center gap-3">
                                         <a href="{{ route('coach.evaluations.index', $assignment) }}" class="text-green-600 hover:underline">Évaluer ({{ $assignment->submissions()->count() }})</a>
+                                        @if($assignment->coach_id === Auth::id())
+                                            <span class="text-gray-300">|</span>
+                                            <x-prolonger-delai-modal
+                                                :action="route('coach.assignments.prolonger', $assignment)"
+                                                label="S'applique à toute la classe : seuls les apprenants n'ayant encore rien déposé seront concernés."
+                                            />
+                                        @endif
                                         <span class="text-gray-300">|</span>
                                         <form action="{{ route('coach.assignments.destroy', $assignment) }}" method="POST" onsubmit="return confirm('Supprimer ce devoir ?');">
                                             @csrf

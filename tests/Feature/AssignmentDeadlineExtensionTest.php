@@ -52,6 +52,14 @@ class AssignmentDeadlineExtensionTest extends TestCase
         return $coach;
     }
 
+    private function creerManager(): User
+    {
+        $manager = User::factory()->create();
+        $manager->assignRole('manager');
+
+        return $manager;
+    }
+
     private function creerDevoir(CourseClass $classe, User $coach, $dueDate, ?User $student = null): Assignment
     {
         return Assignment::create([
@@ -192,5 +200,198 @@ class AssignmentDeadlineExtensionTest extends TestCase
 
         $reponse->assertSessionHasErrors();
         $this->assertDatabaseMissing('submissions', ['assignment_id' => $devoir->id, 'student_id' => $eleve->id]);
+    }
+
+    // --- Prolongation collective (point 4) ---
+
+    public function test_manager_peut_prolonger_collectivement_un_devoir_dun_coach(): void
+    {
+        $classe = $this->creerClasse();
+        $coach = $this->creerCoach();
+        $manager = $this->creerManager();
+        $eleve = $this->creerApprenant($classe);
+        $devoir = $this->creerDevoir($classe, $coach, now()->addDays(2));
+
+        $nouvelleDate = now()->addDays(9)->format('Y-m-d\TH:i');
+
+        $reponse = $this->actingAs($manager)->post(route('manager.assignments.prolonger', $devoir), [
+            'new_due_date' => $nouvelleDate,
+            'motif' => 'Retard general de la classe',
+        ]);
+
+        $reponse->assertRedirect();
+        $reponse->assertSessionDoesntHaveErrors();
+        $devoir->refresh();
+        $this->assertTrue($devoir->dateLimitePour($eleve)->isSameMinute(now()->addDays(9)));
+        $this->assertDatabaseHas('assignment_deadline_extensions', [
+            'assignment_id' => $devoir->id,
+            'student_id' => null,
+            'motif' => 'Retard general de la classe',
+        ]);
+    }
+
+    public function test_coach_peut_prolonger_son_propre_devoir(): void
+    {
+        $classe = $this->creerClasse();
+        $coach = $this->creerCoach();
+        $devoir = $this->creerDevoir($classe, $coach, now()->addDays(2));
+
+        $reponse = $this->actingAs($coach)->post(route('coach.assignments.prolonger', $devoir), [
+            'new_due_date' => now()->addDays(9)->format('Y-m-d\TH:i'),
+            'motif' => 'Retard general',
+        ]);
+
+        $reponse->assertSessionDoesntHaveErrors();
+        $this->assertDatabaseHas('assignment_deadline_extensions', ['assignment_id' => $devoir->id, 'student_id' => null]);
+    }
+
+    public function test_coach_recoit_403_sur_le_devoir_dun_autre_coach(): void
+    {
+        $classe = $this->creerClasse();
+        $auteur = $this->creerCoach();
+        $autreCoach = $this->creerCoach();
+        $devoir = $this->creerDevoir($classe, $auteur, now()->addDays(2));
+
+        $reponse = $this->actingAs($autreCoach)->post(route('coach.assignments.prolonger', $devoir), [
+            'new_due_date' => now()->addDays(9)->format('Y-m-d\TH:i'),
+            'motif' => 'Retard general',
+        ]);
+
+        $reponse->assertStatus(403);
+    }
+
+    public function test_apprenant_recoit_403(): void
+    {
+        $classe = $this->creerClasse();
+        $coach = $this->creerCoach();
+        $eleve = $this->creerApprenant($classe);
+        $devoir = $this->creerDevoir($classe, $coach, now()->addDays(2));
+
+        // Aucune route "assignments.prolonger" n'existe cote apprenant, mais
+        // la policy doit de toute facon refuser un appel direct.
+        $this->assertFalse($eleve->can('prolongerDelai', $devoir));
+
+        $reponse = $this->actingAs($eleve)->post(route('coach.assignments.prolonger', $devoir), [
+            'new_due_date' => now()->addDays(9)->format('Y-m-d\TH:i'),
+            'motif' => 'Retard general',
+        ]);
+
+        $reponse->assertStatus(403);
+    }
+
+    public function test_prolongation_collective_ne_modifie_pas_un_rendu_ou_une_note_existants(): void
+    {
+        $classe = $this->creerClasse();
+        $coach = $this->creerCoach();
+        $manager = $this->creerManager();
+        $eleveARendu = $this->creerApprenant($classe);
+        $eleveSansRendu = $this->creerApprenant($classe);
+        $devoir = $this->creerDevoir($classe, $coach, now()->addDays(2));
+
+        $submission = Submission::create([
+            'assignment_id' => $devoir->id,
+            'student_id' => $eleveARendu->id,
+            'content_text' => 'Ma copie',
+            'submitted_at' => now(),
+        ]);
+        $grade = Grade::create([
+            'submission_id' => $submission->id,
+            'coach_id' => $coach->id,
+            'score' => 15,
+            'feedback' => 'Bon travail',
+        ]);
+
+        $this->actingAs($manager)->post(route('manager.assignments.prolonger', $devoir), [
+            'new_due_date' => now()->addDays(9)->format('Y-m-d\TH:i'),
+            'motif' => 'Retard general',
+        ]);
+
+        $this->assertDatabaseHas('submissions', ['id' => $submission->id, 'content_text' => 'Ma copie']);
+        $this->assertDatabaseHas('grades', ['id' => $grade->id, 'score' => 15]);
+        // L'apprenant qui a deja rendu n'est pas concerne par la prolongation.
+        $devoir->refresh();
+        $this->assertTrue($devoir->dateLimitePour($eleveSansRendu)->isSameMinute(now()->addDays(9)));
+    }
+
+    public function test_date_dans_le_passe_refusee_pour_une_prolongation_collective(): void
+    {
+        $classe = $this->creerClasse();
+        $coach = $this->creerCoach();
+        $manager = $this->creerManager();
+        $devoir = $this->creerDevoir($classe, $coach, now()->addDays(2));
+
+        $reponse = $this->actingAs($manager)->post(route('manager.assignments.prolonger', $devoir), [
+            'new_due_date' => now()->subDay()->format('Y-m-d\TH:i'),
+            'motif' => 'Retard general',
+        ]);
+
+        $reponse->assertSessionHasErrors('new_due_date');
+    }
+
+    public function test_date_anterieure_ou_egale_a_la_date_limite_effective_refusee(): void
+    {
+        $classe = $this->creerClasse();
+        $coach = $this->creerCoach();
+        $manager = $this->creerManager();
+        $devoir = $this->creerDevoir($classe, $coach, now()->addDays(5));
+
+        $reponse = $this->actingAs($manager)->post(route('manager.assignments.prolonger', $devoir), [
+            'new_due_date' => now()->addDays(5)->format('Y-m-d\TH:i'),
+            'motif' => 'Retard general',
+        ]);
+
+        $reponse->assertSessionHasErrors('new_due_date');
+    }
+
+    public function test_motif_vide_refuse_pour_une_prolongation_collective(): void
+    {
+        $classe = $this->creerClasse();
+        $coach = $this->creerCoach();
+        $manager = $this->creerManager();
+        $devoir = $this->creerDevoir($classe, $coach, now()->addDays(5));
+
+        $reponse = $this->actingAs($manager)->post(route('manager.assignments.prolonger', $devoir), [
+            'new_due_date' => now()->addDays(9)->format('Y-m-d\TH:i'),
+            'motif' => '',
+        ]);
+
+        $reponse->assertSessionHasErrors('motif');
+    }
+
+    public function test_manager_assignments_index_affiche_le_bouton_prolonger(): void
+    {
+        $classe = $this->creerClasse();
+        $coach = $this->creerCoach();
+        $manager = $this->creerManager();
+        $this->creerDevoir($classe, $coach, now()->addDays(2));
+
+        $reponse = $this->actingAs($manager)->get(route('manager.assignments.index'));
+
+        $reponse->assertStatus(200);
+        $reponse->assertSee('Prolonger le délai');
+    }
+
+    public function test_coach_assignments_index_masque_le_bouton_prolonger_sur_le_devoir_dun_autre_coach(): void
+    {
+        $classe = $this->creerClasse();
+        $auteur = $this->creerCoach();
+        $autreCoach = $this->creerCoach();
+        // Meme classe que l'auteur, pour que le devoir apparaisse dans la
+        // liste de cet autre coach : sans seance dans la classe, il ne
+        // verrait meme pas la ligne, et le test ne prouverait rien.
+        \App\Models\ClassSession::create([
+            'course_class_id' => $classe->id,
+            'coach_id' => $autreCoach->id,
+            'start_time' => now()->addDay(),
+            'end_time' => now()->addDay()->addHour(),
+            'status' => 'scheduled',
+        ]);
+        $this->creerDevoir($classe, $auteur, now()->addDays(2));
+
+        $reponse = $this->actingAs($autreCoach)->get(route('coach.assignments.index'));
+
+        $reponse->assertStatus(200);
+        $reponse->assertSee('Devoir de test');
+        $reponse->assertDontSee('Prolonger le délai');
     }
 }

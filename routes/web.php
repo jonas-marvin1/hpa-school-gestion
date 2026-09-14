@@ -120,6 +120,10 @@ Route::middleware(['auth', 'role:manager|admin'])->prefix('manager')->name('mana
     // de vie (creation, attribution, correction), y compris sur les
     // evaluations creees par un coach (point 1, fiche du 27/08/2026).
     Route::resource('assignments', \App\Http\Controllers\Manager\AssignmentController::class)->except(['show']);
+    // Prolongation de delai (fiche du 14/09/2026, point 3) : un seul point
+    // d'entree pour la prolongation collective (sans student_id) et
+    // individuelle (avec), l'habilitation etant verifiee par AssignmentPolicy.
+    Route::post('/assignments/{assignment}/prolonger', [\App\Http\Controllers\Manager\AssignmentController::class, 'prolonger'])->name('assignments.prolonger');
     Route::get('/assignments/{assignment}/submissions', [\App\Http\Controllers\Manager\EvaluationController::class, 'index'])->name('evaluations.index');
     Route::post('/submissions/{submission}/evaluate', [\App\Http\Controllers\Manager\EvaluationController::class, 'store'])->name('evaluations.store');
 });
@@ -142,6 +146,7 @@ Route::middleware(['auth', 'role:coach'])->prefix('coach')->name('coach.')->grou
 
     // Assignments & Evaluations
     Route::resource('assignments', \App\Http\Controllers\Coach\AssignmentController::class)->except(['show']);
+    Route::post('/assignments/{assignment}/prolonger', [\App\Http\Controllers\Coach\AssignmentController::class, 'prolonger'])->name('assignments.prolonger');
     Route::get('/assignments/{assignment}/submissions', [\App\Http\Controllers\Coach\EvaluationController::class, 'index'])->name('evaluations.index');
     Route::post('/submissions/{submission}/evaluate', [\App\Http\Controllers\Coach\EvaluationController::class, 'store'])->name('evaluations.store');
 
