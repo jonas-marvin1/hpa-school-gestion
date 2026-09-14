@@ -68,3 +68,64 @@ puisqu'il ne les concerne pas.
 Vous pouvez revenir sur une note déjà enregistrée à tout moment pour la
 corriger : il suffit de ressaisir une nouvelle valeur et d'enregistrer à
 nouveau.
+
+## 4. Prolonger le délai d'une évaluation
+
+Un apprenant n'a pas rendu dans les temps ? Vous pouvez repousser la date
+limite — pour lui seul, ou pour toute la classe.
+
+### Prolonger pour toute la classe
+
+1. Depuis la liste **Évaluations**, cliquez sur **Prolonger le délai** en
+   face du devoir concerné.
+2. Une fenêtre s'ouvre, avec un rappel que l'action s'applique à toute la
+   classe. Choisissez la **nouvelle date limite** et saisissez le **motif**
+   de la prolongation (obligatoire).
+3. Cliquez sur **Confirmer la prolongation**.
+
+Un message confirme la nouvelle date et le nombre d'apprenants concernés.
+
+### Prolonger pour un seul apprenant
+
+1. Depuis la liste **Évaluations**, cliquez sur **Évaluer** en face du
+   devoir concerné pour arriver sur la liste des apprenants.
+2. Une colonne **Date limite** indique, pour chaque apprenant, la date qui
+   s'applique à lui. Si elle diffère de la date du devoir (parce qu'il a
+   déjà été prolongé), un badge **Délai prolongé** l'indique, avec la date
+   d'origine en infobulle.
+3. En face d'un apprenant **en attente**, cliquez sur **Prolonger**, puis
+   remplissez la nouvelle date et le motif comme ci-dessus.
+
+Cette prolongation ne concerne que cet apprenant : les autres élèves de la
+classe gardent leur date d'origine, et rien n'est visible ni modifié pour
+eux.
+
+> **Deux points à ne jamais oublier :**
+> - **Impossible de prolonger pour un apprenant qui a déjà rendu**, noté ou
+>   non. Le bouton **Prolonger** n'apparaît pas en face de son nom, et la
+>   mention « Rendu déjà déposé » explique pourquoi. Vous pouvez toujours
+>   prolonger pour la classe entière dans ce cas : seuls les apprenants
+>   n'ayant rien déposé seront concernés, les rendus et notes déjà
+>   enregistrés d'un autre apprenant restent inchangés.
+> - **On ne peut que repousser un délai, jamais le raccourcir.** La
+>   nouvelle date doit toujours être postérieure à la date limite actuelle
+>   de l'apprenant (ou du devoir, en prolongation collective) : la fenêtre
+>   refuse toute autre valeur, avec un message expliquant pourquoi.
+
+### Qui peut prolonger quoi
+
+- **La gestionnaire et l'administration** peuvent prolonger **n'importe
+  quelle évaluation**, y compris celles créées par un formateur — même
+  règle que pour modifier ou supprimer un devoir.
+- **Le formateur** ne peut prolonger que **les devoirs dont il est
+  l'auteur**. Le bouton **Prolonger le délai** / **Prolonger** n'apparaît
+  tout simplement pas sur les devoirs créés par un autre formateur.
+
+### Ce que l'apprenant voit
+
+L'apprenant reçoit une notification interne dès que son délai est
+prolongé, avec la nouvelle date. Sur sa page « Mes Devoirs », la date
+limite affichée est toujours la date qui s'applique réellement à lui, avec
+la mention « Délai prolongé » le cas échéant. Le rappel automatique
+d'échéance, s'il en avait déjà reçu un pour ce devoir, repart lui aussi
+sur la nouvelle date.
