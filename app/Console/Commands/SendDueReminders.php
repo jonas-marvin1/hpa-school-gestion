@@ -150,47 +150,57 @@ class SendDueReminders extends Command
         return $count;
     }
 
+    /**
+     * La date limite effective depend d'une eventuelle prolongation propre
+     * a chaque apprenant (fiche du 14/09/2026, point 3) : le filtre ne peut
+     * donc plus se faire en SQL sur due_date, il faut charger les devoirs
+     * puis calculer/comparer en PHP via Assignment::dateLimitePour(), pour
+     * chaque apprenant, aux trois jalons de rappel.
+     */
     private function sendAssignmentReminders(): int
     {
         $count = 0;
 
-        foreach (self::REMINDER_OFFSETS_DAYS as $offset) {
-            $targetDate = now()->addDays($offset)->toDateString();
+        $ciblesDates = collect(self::REMINDER_OFFSETS_DAYS)
+            ->map(fn ($offset) => now()->addDays($offset)->toDateString());
 
-            $assignments = Assignment::whereDate('due_date', $targetDate)
-                ->with(['courseClass.users', 'submissions', 'student'])
-                ->get();
+        $assignments = Assignment::with(['courseClass.users', 'submissions', 'student', 'deadlineExtensions'])->get();
 
-            foreach ($assignments as $assignment) {
-                if (!$assignment->courseClass) {
+        foreach ($assignments as $assignment) {
+            if (!$assignment->courseClass) {
+                continue;
+            }
+
+            $submittedStudentIds = $assignment->submissions->pluck('student_id')->all();
+
+            // Devoir nominatif : seul l'apprenant vise recoit le rappel,
+            // les autres ne voient meme pas ce devoir dans leur espace.
+            $students = $assignment->student_id
+                ? collect([$assignment->student])->filter()
+                : $assignment->courseClass->users->filter(fn (User $u) => $u->hasRole('student'));
+
+            foreach ($students as $student) {
+                if (in_array($student->id, $submittedStudentIds, true)) {
                     continue;
                 }
 
-                $submittedStudentIds = $assignment->submissions->pluck('student_id')->all();
+                $echeance = $assignment->dateLimitePour($student);
 
-                // Devoir nominatif : seul l'apprenant vise recoit le rappel,
-                // les autres ne voient meme pas ce devoir dans leur espace.
-                $students = $assignment->student_id
-                    ? collect([$assignment->student])->filter()
-                    : $assignment->courseClass->users->filter(fn (User $u) => $u->hasRole('student'));
-
-                foreach ($students as $student) {
-                    if (in_array($student->id, $submittedStudentIds, true)) {
-                        continue;
-                    }
-
-                    if ($this->alreadyNotifiedToday($student, AssignmentReminderNotification::class, 'assignment_id', $assignment->id)) {
-                        continue;
-                    }
-
-                    $student->notify(new AssignmentReminderNotification([
-                        'class_name' => $assignment->courseClass->name ?? 'N/A',
-                        'assignment_id' => $assignment->id,
-                        'action_url' => route('student.assignments.show', $assignment),
-                    ]));
-
-                    $count++;
+                if (! $ciblesDates->contains($echeance->toDateString())) {
+                    continue;
                 }
+
+                if ($this->alreadyNotifiedToday($student, AssignmentReminderNotification::class, 'assignment_id', $assignment->id)) {
+                    continue;
+                }
+
+                $student->notify(new AssignmentReminderNotification([
+                    'class_name' => $assignment->courseClass->name ?? 'N/A',
+                    'assignment_id' => $assignment->id,
+                    'action_url' => route('student.assignments.show', $assignment),
+                ]));
+
+                $count++;
             }
         }
 

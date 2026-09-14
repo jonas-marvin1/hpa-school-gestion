@@ -47,8 +47,8 @@ trait ProlongeDelaiEvaluation
         );
 
         $message = $student
-            ? "Délai prolongé pour {$student->name} jusqu'au {$resultat['date']->format('d/m/Y à H:i')}."
-            : "Délai prolongé jusqu'au {$resultat['date']->format('d/m/Y à H:i')} — {$resultat['notifies']} apprenant(s) concerné(s).";
+            ? "Délai prolongé pour {$student->name} jusqu'au {$resultat['date']->format('d/m/Y à H:i')} — apprenant notifié."
+            : "Délai prolongé jusqu'au {$resultat['date']->format('d/m/Y à H:i')} — {$resultat['notifies']} apprenant(s) notifié(s).";
 
         return back()->with('status', $message);
     }

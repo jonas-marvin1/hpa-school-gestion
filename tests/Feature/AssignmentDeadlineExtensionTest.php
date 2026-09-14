@@ -10,8 +10,11 @@ use App\Models\Level;
 use App\Models\Program;
 use App\Models\Submission;
 use App\Models\User;
+use App\Notifications\AssignmentDeadlineExtendedNotification;
+use App\Notifications\AssignmentReminderNotification;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
 
 /**
@@ -531,5 +534,88 @@ class AssignmentDeadlineExtensionTest extends TestCase
         $reponse->assertSee('Date limite');
         $reponse->assertSee('Prolonger');
         $reponse->assertSee('Rendu déjà déposé');
+    }
+
+    // --- Notifications et rappels (point 6) ---
+
+    public function test_prolongation_individuelle_notifie_lapprenant(): void
+    {
+        Notification::fake();
+
+        $classe = $this->creerClasse();
+        $coach = $this->creerCoach();
+        $manager = $this->creerManager();
+        $eleve = $this->creerApprenant($classe);
+        $devoir = $this->creerDevoir($classe, $coach, now()->addDays(2));
+
+        $this->actingAs($manager)->post(route('manager.assignments.prolonger', $devoir), [
+            'student_id' => $eleve->id,
+            'new_due_date' => now()->addDays(9)->format('Y-m-d\TH:i'),
+            'motif' => 'Retard justifié',
+        ]);
+
+        Notification::assertSentTo($eleve, AssignmentDeadlineExtendedNotification::class);
+    }
+
+    public function test_prolongation_collective_ne_notifie_pas_lapprenant_ayant_deja_rendu(): void
+    {
+        Notification::fake();
+
+        $classe = $this->creerClasse();
+        $coach = $this->creerCoach();
+        $manager = $this->creerManager();
+        $eleveARendu = $this->creerApprenant($classe);
+        $eleveSansRendu = $this->creerApprenant($classe);
+        $devoir = $this->creerDevoir($classe, $coach, now()->addDays(2));
+
+        Submission::create([
+            'assignment_id' => $devoir->id,
+            'student_id' => $eleveARendu->id,
+            'content_text' => 'Ma copie',
+            'submitted_at' => now(),
+        ]);
+
+        $this->actingAs($manager)->post(route('manager.assignments.prolonger', $devoir), [
+            'new_due_date' => now()->addDays(9)->format('Y-m-d\TH:i'),
+            'motif' => 'Retard général',
+        ]);
+
+        Notification::assertSentTo($eleveSansRendu, AssignmentDeadlineExtendedNotification::class);
+        Notification::assertNotSentTo($eleveARendu, AssignmentDeadlineExtendedNotification::class);
+    }
+
+    public function test_rappel_repart_apres_une_prolongation_alors_quun_rappel_avait_deja_ete_envoye(): void
+    {
+        $classe = $this->creerClasse();
+        $coach = $this->creerCoach();
+        $manager = $this->creerManager();
+        $eleve = $this->creerApprenant($classe);
+        // Echeance aujourd'hui (jalon J-0) : premier rappel envoye tout de suite.
+        $devoir = $this->creerDevoir($classe, $coach, now()->addHours(2));
+
+        $this->artisan('reminders:send');
+        $this->assertSame(1, $eleve->notifications()->where('type', AssignmentReminderNotification::class)->count());
+
+        // DispatchDueReminders (middleware global "web") relance elle-meme
+        // reminders:send apres chaque requete : desactivee ici pour garder
+        // la main sur le moment exact ou la commande tourne, et isoler ce
+        // que ce test verifie reellement (la remise a zero du marqueur).
+        $reponseProlongation = $this->withoutMiddleware(\App\Http\Middleware\DispatchDueReminders::class)
+            ->actingAs($manager)->post(route('manager.assignments.prolonger', $devoir), [
+                'student_id' => $eleve->id,
+                // Correspond au jalon J-3 d'aujourd'hui : un nouveau rappel
+                // doit pouvoir repartir le jour meme.
+                'new_due_date' => now()->addDays(3)->format('Y-m-d\TH:i'),
+                'motif' => 'Retard justifié',
+            ]);
+        $reponseProlongation->assertSessionDoesntHaveErrors();
+
+        // Le marqueur du rappel deja envoye aujourd'hui doit avoir ete efface
+        // par la prolongation, sinon le second appel ci-dessous serait bloque.
+        $this->assertSame(0, $eleve->notifications()->where('type', AssignmentReminderNotification::class)->count());
+
+        $this->artisan('reminders:send');
+
+        $this->assertSame(1, $eleve->notifications()->where('type', AssignmentReminderNotification::class)->count());
     }
 }

@@ -6,6 +6,8 @@ use App\Models\Assignment;
 use App\Models\AssignmentDeadlineExtension;
 use App\Models\Submission;
 use App\Models\User;
+use App\Notifications\AssignmentDeadlineExtendedNotification;
+use App\Notifications\AssignmentReminderNotification;
 use Carbon\Carbon;
 use Illuminate\Validation\ValidationException;
 
@@ -64,6 +66,8 @@ class ProlongationDelaiEvaluation
             'extended_by' => $accordePar->id,
         ]);
 
+        $this->avertir($assignment, collect([$student]), $nouvelleDate);
+
         return ['date' => $nouvelleDate, 'notifies' => 1, 'concernes' => collect([$student])];
     }
 
@@ -100,7 +104,38 @@ class ProlongationDelaiEvaluation
         // individuelle qui lui est propre : voir Assignment::dateLimitePour().
         $assignment->update(['due_date' => $nouvelleDate]);
 
+        $this->avertir($assignment, $concernes, $nouvelleDate);
+
         return ['date' => $nouvelleDate, 'notifies' => $concernes->count(), 'concernes' => $concernes];
+    }
+
+    /**
+     * Notifie chaque apprenant concerne et reinitialise le marqueur de
+     * rappel de devoir : sans ce nettoyage, un rappel deja envoye aujourd'hui
+     * pour l'ancienne date bloquerait tout nouveau rappel pour la nouvelle
+     * (SendDueReminders::alreadyNotifiedToday() ne distingue que par
+     * assignment_id, pas par date), et la prolongation resterait a moitie
+     * muette (fiche du 14/09/2026, §6).
+     */
+    private function avertir(Assignment $assignment, iterable $students, Carbon $nouvelleDate): void
+    {
+        foreach ($students as $student) {
+            $student->notifications()
+                ->where('type', AssignmentReminderNotification::class)
+                ->get()
+                ->each(function ($notification) use ($assignment) {
+                    if (($notification->data['assignment_id'] ?? null) === $assignment->id) {
+                        $notification->delete();
+                    }
+                });
+
+            $student->notify(new AssignmentDeadlineExtendedNotification([
+                'assignment_id' => $assignment->id,
+                'assignment_title' => $assignment->title,
+                'new_due_date' => $nouvelleDate->format('d/m/Y à H:i'),
+                'action_url' => route('student.assignments.show', $assignment),
+            ]));
+        }
     }
 
     /**
