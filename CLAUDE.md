@@ -55,6 +55,17 @@ Pièges déjà rencontrés, à ne pas rechercher une seconde fois :
   `x-data` : tout parcours du DOM depuis un composant (`querySelectorAll`,
   etc.) doit partir de `$root`, sinon un `@change`/`@click` posé sur un
   élément différent de la racine cherche au mauvais endroit sans erreur.
+- toute directive Alpine (`@click`, `@submit`, `x-show`, `x-model`…) doit se
+  trouver à l'intérieur d'un élément portant `x-data`. En dehors, Alpine
+  l'ignore sans lever la moindre erreur : un `@submit.prevent` orphelin
+  laisse le formulaire partir nativement (cas vecu : annulation d'echeance,
+  correctif du 14/09/2026, ou deux formulaires places au-dessus du
+  `x-data` du composant soumettaient sans jamais demander de motif).
+  Vérifier la portée, pas seulement la syntaxe.
+- ne pas utiliser `prompt()` ni `confirm()` pour une saisie ou une
+  confirmation métier : utiliser une fenêtre de l'application (voir
+  `resources/views/components/prolonger-delai-modal.blade.php` pour le
+  modèle).
 
 ## Déploiement et sauvegardes
 
