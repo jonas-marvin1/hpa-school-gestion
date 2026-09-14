@@ -14,9 +14,19 @@
                 </div>
             @endif
 
+            @if ($errors->any())
+                <div class="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative">
+                    <ul>
+                        @foreach ($errors->all() as $error)
+                            <li>- {{ $error }}</li>
+                        @endforeach
+                    </ul>
+                </div>
+            @endif
+
             <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                 <div class="p-6 text-gray-900">
-                    
+
                     <div class="overflow-x-auto">
                         {{-- whitespace-nowrap retire : il empechait tout retour a la ligne,
                              donc l'affichage du rendu complet. --}}
@@ -25,6 +35,7 @@
                             <tr>
                                 <th class="border-b py-2 px-4">Apprenant</th>
                                 <th class="border-b py-2 px-4">Statut de soumission</th>
+                                <th class="border-b py-2 px-4">Date limite</th>
                                 <th class="border-b py-2 px-4 min-w-[420px]">Rendu</th>
                                 <th class="border-b py-2 px-4 text-center">Note (/20)</th>
                             </tr>
@@ -34,14 +45,37 @@
                                 @php
                                     $submission = $submissions->get($student->id);
                                     $grade = $submission ? $submission->grade : null;
+                                    $dateLimite = $assignment->dateLimitePour($student);
+                                    $delaiProlonge = ! $dateLimite->equalTo(\Carbon\Carbon::parse($assignment->due_date));
                                 @endphp
-                                <tr>
+                                <tr x-data="{ openProlonger: false }">
                                     <td class="border-b py-4 px-4 font-medium">{{ $student->name }}</td>
                                     <td class="border-b py-4 px-4">
                                         @if($submission)
                                             <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Soumis le {{ \Carbon\Carbon::parse($submission->created_at)->format('d/m/Y H:i') }}</span>
                                         @else
                                             <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">En attente</span>
+                                        @endif
+                                    </td>
+                                    <td class="border-b py-4 px-4 text-sm">
+                                        {{ $dateLimite->format('d/m/Y H:i') }}
+                                        @if($delaiProlonge)
+                                            <span class="block mt-1">
+                                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800" title="Date d'origine : {{ \Carbon\Carbon::parse($assignment->due_date)->format('d/m/Y H:i') }}">Délai prolongé</span>
+                                            </span>
+                                        @endif
+                                        @if($submission)
+                                            <div class="mt-1 text-xs text-gray-400 italic">Rendu déjà déposé</div>
+                                        @elseif($assignment->coach_id === Auth::id())
+                                            <div class="mt-1">
+                                                <x-prolonger-delai-modal
+                                                    :action="route('coach.assignments.prolonger', $assignment)"
+                                                    :student-id="$student->id"
+                                                    label="Prolongation réservée à {{ $student->name }}."
+                                                    trigger-label="Prolonger"
+                                                    trigger-class="text-indigo-600 hover:underline text-xs"
+                                                />
+                                            </div>
                                         @endif
                                     </td>
                                     <td class="border-b py-4 px-4 text-sm align-top">
@@ -107,7 +141,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="4" class="py-4 text-center text-gray-500">Aucun étudiant dans cette classe.</td>
+                                    <td colspan="5" class="py-4 text-center text-gray-500">Aucun étudiant dans cette classe.</td>
                                 </tr>
                             @endforelse
                         </tbody>

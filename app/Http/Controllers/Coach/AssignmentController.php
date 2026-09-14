@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Coach;
 
 use App\Http\Controllers\Concerns\GereAttributionApprenant;
+use App\Http\Controllers\Concerns\ProlongeDelaiEvaluation;
 use App\Http\Controllers\Controller;
 use App\Models\Assignment;
 use Illuminate\Http\Request;
@@ -11,6 +12,7 @@ use Illuminate\Support\Facades\Auth;
 class AssignmentController extends Controller
 {
     use GereAttributionApprenant;
+    use ProlongeDelaiEvaluation;
 
     public function index(Request $request)
     {

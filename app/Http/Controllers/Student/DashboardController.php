@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use App\Models\ClassSession;
 use App\Models\Attendance;
+use App\Models\PaymentPlan;
 use App\Models\Submission;
 
 class DashboardController extends Controller
@@ -104,6 +105,29 @@ class DashboardController extends Controller
         $echelleNiveaux = \App\Models\EnglishLevel::echelle();
         $niveauActuel   = $student->englishLevel;
 
+        // Solde du : regle metier, annuler une echeance ne change pas la dette
+        // (voir docs/fiches/2026-09-14.md, point 1). Sommer les echeances
+        // "pending" la ferait baisser a chaque annulation ; sommer aussi les
+        // "cancelled" la compterait deux fois une fois la somme replanifiee
+        // dans une nouvelle echeance. Le solde doit donc venir du contrat.
+        $plan = PaymentPlan::where('student_id', $student->id)->latest('id')->first();
+
+        if ($plan) {
+            // Cas courant : le solde vient du plan (total - avance - regle),
+            // exactement le calcul deja affiche a l'administrateur sur la
+            // page du plan. Les deux ecrans disent ainsi la meme chose par
+            // construction, pas par coincidence.
+            $soldeDu = $plan->soldeRestant();
+        } else {
+            // Echeances isolees, non rattachees a un plan de paiement
+            // (payment_plan_id nullable) : il n'y a pas de contrat global a
+            // partir duquel calculer un solde, on retombe sur la somme des
+            // echeances encore en attente.
+            $soldeDu = (float) \App\Models\StudentPayment::where('student_id', $student->id)
+                ->where('status', 'pending')
+                ->sum('amount');
+        }
+
         // Indicateurs du tableau de bord apprenant : meme logique que cote
         // formateur, le detail vit dans les pages de la rubrique « Ma formation ».
         $kpis = [
@@ -118,9 +142,7 @@ class DashboardController extends Controller
                                         ->where('status', '!=', 'cancelled')
                                         ->count(),
             'programmes'          => $programmes->count(),
-            'solde_du'            => \App\Models\StudentPayment::where('student_id', $student->id)
-                                        ->where('status', '!=', 'paid')
-                                        ->sum('amount'),
+            'solde_du'            => $soldeDu,
         ];
 
         return view('student.dashboard', compact('kpis',

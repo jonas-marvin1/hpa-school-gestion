@@ -319,6 +319,14 @@ class UserController extends Controller
             'avatar' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
         ]);
 
+        // Un administrateur ne peut pas se desactiver lui-meme : sans ce
+        // garde-fou, il se verrouillerait hors de l'application (le second
+        // verrou, EnsureUserIsActive, couperait sa propre session juste apres).
+        if (Auth::id() === $user->id && $validated['status'] !== 'active') {
+            return redirect()->route('admin.users.edit', $user)
+                ->withErrors(['status' => 'Vous ne pouvez pas désactiver votre propre compte.']);
+        }
+
         $updateData = [
             'name' => $validated['name'],
             'email' => $validated['email'],

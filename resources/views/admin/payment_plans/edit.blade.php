@@ -82,6 +82,13 @@
                                                 <td class="border-b py-2 px-3 text-center">
                                                     @if($e->status === 'paid')
                                                         <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Réglée</span>
+                                                    @elseif($e->status === 'cancelled')
+                                                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-200 text-gray-700">Annulée</span>
+                                                        {{-- Une echeance annulee reste visible, avec son motif : elle ne
+                                                             disparait pas, elle est seulement marquee comme telle. --}}
+                                                        @if($e->notes)
+                                                            <p class="text-xs text-gray-500 mt-1 whitespace-pre-line">{{ $e->notes }}</p>
+                                                        @endif
                                                     @elseif($e->due_date->lt(now()->startOfDay()))
                                                         <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">En retard</span>
                                                     @else
@@ -89,11 +96,30 @@
                                                     @endif
                                                 </td>
                                                 <td class="border-b py-2 px-3 text-center">
-                                                    @if($e->status !== 'paid')
-                                                        <form method="POST" action="{{ route('admin.echeances.payee', $e) }}" class="inline">
+                                                    @if($e->status === 'pending')
+                                                        <div class="flex flex-col items-center gap-1">
+                                                            <form method="POST" action="{{ route('admin.echeances.payee', $e) }}" class="inline">
+                                                                @csrf
+                                                                @method('PATCH')
+                                                                <button type="submit" class="text-indigo-600 hover:underline">Marquer réglée</button>
+                                                            </form>
+                                                            {{-- Motif demande via prompt() : meme idiome que les confirm()
+                                                                 du reste de l'appli, $el.submit() n'y redeclenche pas
+                                                                 l'evenement submit (contrairement a $el.requestSubmit()). --}}
+                                                            <form method="POST" action="{{ route('admin.echeances.annuler', $e) }}" class="inline"
+                                                                  @submit.prevent="if ($el.querySelector('input[name=motif]').value = prompt('Motif de l\'annulation :')) { $el.submit(); }">
+                                                                @csrf
+                                                                @method('PATCH')
+                                                                <input type="hidden" name="motif">
+                                                                <button type="submit" class="text-red-600 hover:underline">Annuler</button>
+                                                            </form>
+                                                        </div>
+                                                    @elseif($e->status === 'cancelled')
+                                                        <form method="POST" action="{{ route('admin.echeances.reactiver', $e) }}" class="inline"
+                                                              @submit.prevent="if (confirm('Réactiver cette échéance ?')) { $el.submit(); }">
                                                             @csrf
                                                             @method('PATCH')
-                                                            <button type="submit" class="text-indigo-600 hover:underline">Marquer réglée</button>
+                                                            <button type="submit" class="text-indigo-600 hover:underline">Réactiver</button>
                                                         </form>
                                                     @else
                                                         <span class="text-xs text-gray-400">{{ $e->paid_date?->format('d/m/Y') }}</span>

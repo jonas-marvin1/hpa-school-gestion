@@ -21,6 +21,11 @@ $app = Application::configure(basePath: dirname(__DIR__))
         // n'appelle `schedule:run`. Il s'execute apres la reponse et se
         // limite a un passage toutes les deux minutes.
         $middleware->appendToGroup('web', \App\Http\Middleware\DispatchDueReminders::class);
+
+        // Coupe l'acces des la requete suivante si le compte connecte a ete
+        // desactive en cours de session (voir LoginRequest pour le verrou a
+        // la connexion elle-meme).
+        $middleware->appendToGroup('web', \App\Http\Middleware\EnsureUserIsActive::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

@@ -71,6 +71,12 @@ class AssignmentController extends Controller
             return back()->withErrors('Vous avez déjà soumis ce devoir.');
         }
 
+        // Date limite effective de cet apprenant, prolongation eventuelle
+        // comprise : voir Assignment::dateLimitePour().
+        if ($assignment->dateLimitePour($student)->isPast()) {
+            return back()->withErrors('La date limite de ce devoir est dépassée, le dépôt n\'est plus possible.');
+        }
+
         $rules = [];
         if ($assignment->type === 'text') {
             $rules['content'] = 'required|string';

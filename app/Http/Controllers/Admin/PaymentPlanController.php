@@ -102,9 +102,14 @@ class PaymentPlanController extends Controller
                     'notes'          => $valide['notes'] ?? null,
                 ]);
 
-                // Les echeances deja reglees sont conservees telles quelles :
-                // seules celles restant a payer sont remplacees.
-                $plan->echeances()->where('status', '!=', 'paid')->delete();
+                // Seules les echeances en attente sont remplacees. Les
+                // reglees sont conservees car deja encaissees ; les annulees
+                // le sont aussi, avec leur motif, sinon l'historique qu'on
+                // vient d'ajouter disparaitrait au premier reajustement du
+                // calendrier. La somme qu'elles representaient reste due
+                // (regle du point 1 du 14/09/2026) : c'est a l'administrateur
+                // de la replanifier via une nouvelle echeance pending.
+                $plan->echeances()->where('status', 'pending')->delete();
             } else {
                 $plan = PaymentPlan::create([
                     'student_id'     => $student->id,
@@ -141,6 +146,52 @@ class PaymentPlanController extends Controller
         ]);
 
         return back()->with('status', 'Échéance marquée comme réglée.');
+    }
+
+    /**
+     * Annule une echeance en attente, motif obligatoire a l'appui.
+     *
+     * Une echeance deja reglee est refusee : l'annuler ne serait pas une
+     * annulation mais un remboursement, une operation comptable differente
+     * qu'on traitera separement si le besoin s'en presente un jour.
+     */
+    public function annuler(Request $request, StudentPayment $echeance)
+    {
+        if ($echeance->status !== 'pending') {
+            throw ValidationException::withMessages([
+                'echeance' => 'Seule une échéance en attente peut être annulée.',
+            ]);
+        }
+
+        $valide = $request->validate([
+            'motif' => 'required|string|max:255',
+        ], [], ['motif' => 'motif']);
+
+        // Le motif s'ajoute aux notes existantes plutot que de les remplacer,
+        // prefixe par la date : c'est la seule trace de ce qui s'est passe
+        // pour qui reprendra le dossier dans deux ans.
+        $entree = sprintf('[%s] Annulée : %s', now()->format('d/m/Y'), $valide['motif']);
+
+        $echeance->update([
+            'status' => 'cancelled',
+            'notes'  => trim(($echeance->notes ? $echeance->notes."\n" : '').$entree),
+        ]);
+
+        return back()->with('status', 'Échéance annulée.');
+    }
+
+    /** Remet une echeance annulee en attente. */
+    public function reactiver(StudentPayment $echeance)
+    {
+        if ($echeance->status !== 'cancelled') {
+            throw ValidationException::withMessages([
+                'echeance' => 'Seule une échéance annulée peut être réactivée.',
+            ]);
+        }
+
+        $echeance->update(['status' => 'pending']);
+
+        return back()->with('status', 'Échéance réactivée.');
     }
 
     /**

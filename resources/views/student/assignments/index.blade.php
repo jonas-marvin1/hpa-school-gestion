@@ -26,13 +26,18 @@
                             @forelse($assignments as $assignment)
                                 @php
                                     $submission = $assignment->submissions->first();
-                                    $isLate = \Carbon\Carbon::parse($assignment->due_date)->isPast();
+                                    $dateLimite = $assignment->dateLimitePour(auth()->user());
+                                    $isLate = $dateLimite->isPast();
+                                    $delaiProlonge = ! $dateLimite->equalTo(\Carbon\Carbon::parse($assignment->due_date));
                                 @endphp
                                 <tr class="hover:bg-gray-50">
                                     <td class="border-b py-3 px-4 font-medium">{{ $assignment->title }}</td>
                                     <td class="border-b py-3 px-4 text-sm text-gray-600">{{ $assignment->courseClass->name ?? 'N/A' }}</td>
                                     <td class="border-b py-3 px-4 text-sm {{ $isLate && !$submission ? 'text-red-600 font-semibold' : '' }}">
-                                        {{ \Carbon\Carbon::parse($assignment->due_date)->format('d/m/Y') }}
+                                        {{ $dateLimite->format('d/m/Y') }}
+                                        @if($delaiProlonge)
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800 ml-1">Prolongé</span>
+                                        @endif
                                     </td>
                                     <td class="border-b py-3 px-4">
                                         @if($submission)

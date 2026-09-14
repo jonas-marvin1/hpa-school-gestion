@@ -103,7 +103,8 @@ class StudentTest extends TestCase
             'course_class_id' => $class->id,
             'coach_id' => $coach->id,
             'title' => 'Test Assignment',
-            'type' => 'text'
+            'type' => 'text',
+            'due_date' => now()->addDays(3),
         ]);
 
         $response = $this->actingAs($student)->post(route('student.assignments.submit', $assignment), [
@@ -156,5 +157,33 @@ class StudentTest extends TestCase
             'feedback' => 'Great session!',
             'feedback_status' => 'pending'
         ]);
+    }
+
+    public function test_cancelled_installment_is_excluded_from_the_balance_due_without_a_plan(): void
+    {
+        // Echeances isolees, sans plan de paiement (payment_plan_id nul) :
+        // seul cas ou le solde apprenant reste une somme d'echeances.
+        $student = $this->getStudentUser();
+
+        \App\Models\StudentPayment::create([
+            'student_id' => $student->id,
+            'amount'     => 30000,
+            'due_date'   => now()->addDays(10),
+            'status'     => 'pending',
+        ]);
+
+        // Annulee : ne doit pas gonfler le solde du affiche a l'apprenant.
+        \App\Models\StudentPayment::create([
+            'student_id' => $student->id,
+            'amount'     => 20000,
+            'due_date'   => now()->addDays(20),
+            'status'     => 'cancelled',
+        ]);
+
+        $response = $this->actingAs($student)->get(route('student.dashboard'));
+
+        $response->assertStatus(200);
+        $kpis = $response->viewData('kpis');
+        $this->assertEquals(30000, $kpis['solde_du']);
     }
 }

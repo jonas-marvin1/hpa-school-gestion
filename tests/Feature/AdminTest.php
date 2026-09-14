@@ -72,6 +72,22 @@ class AdminTest extends TestCase
         $this->assertTrue($user->fresh()->hasRole('coach'));
     }
 
+    public function test_admin_cannot_deactivate_their_own_account(): void
+    {
+        $admin = $this->getAdminUser();
+
+        $response = $this->actingAs($admin)->put(route('admin.users.update', $admin->id), [
+            'name' => $admin->name,
+            'email' => $admin->email,
+            'role' => 'admin',
+            'status' => 'inactive',
+        ]);
+
+        $response->assertRedirect(route('admin.users.edit', $admin));
+        $response->assertSessionHasErrors('status');
+        $this->assertSame('active', $admin->fresh()->status);
+    }
+
     public function test_admin_can_delete_user(): void
     {
         $user = User::factory()->create();
@@ -372,5 +388,334 @@ class AdminTest extends TestCase
         $response->assertStatus(200);
         $response->assertSee('Alice Paiement');
         $response->assertDontSee('Bob Paiement');
+    }
+
+    public function test_admin_can_cancel_a_pending_installment_with_a_reason(): void
+    {
+        $student = User::factory()->create();
+        $student->assignRole('student');
+
+        $echeance = \App\Models\StudentPayment::create([
+            'student_id' => $student->id,
+            'amount'     => 50000,
+            'due_date'   => now()->addDays(10),
+            'status'     => 'pending',
+        ]);
+
+        $response = $this->actingAs($this->getAdminUser())->patch(
+            route('admin.echeances.annuler', $echeance),
+            ['motif' => 'Abandon de la formation']
+        );
+
+        $response->assertRedirect();
+        $echeance->refresh();
+        $this->assertSame('cancelled', $echeance->status);
+        $this->assertStringContainsString('Abandon de la formation', $echeance->notes);
+        $this->assertStringContainsString(now()->format('d/m/Y'), $echeance->notes);
+    }
+
+    public function test_cancelling_a_pending_installment_without_a_reason_is_refused(): void
+    {
+        $student = User::factory()->create();
+        $student->assignRole('student');
+
+        $echeance = \App\Models\StudentPayment::create([
+            'student_id' => $student->id,
+            'amount'     => 50000,
+            'due_date'   => now()->addDays(10),
+            'status'     => 'pending',
+        ]);
+
+        $response = $this->actingAs($this->getAdminUser())->patch(route('admin.echeances.annuler', $echeance), []);
+
+        $response->assertSessionHasErrors('motif');
+        $this->assertSame('pending', $echeance->fresh()->status);
+    }
+
+    public function test_cancelling_an_already_paid_installment_is_refused(): void
+    {
+        $student = User::factory()->create();
+        $student->assignRole('student');
+
+        $echeance = \App\Models\StudentPayment::create([
+            'student_id' => $student->id,
+            'amount'     => 50000,
+            'due_date'   => now()->subDays(5),
+            'paid_date'  => now()->subDays(5),
+            'status'     => 'paid',
+        ]);
+
+        $response = $this->actingAs($this->getAdminUser())->patch(
+            route('admin.echeances.annuler', $echeance),
+            ['motif' => 'Erreur de saisie']
+        );
+
+        $response->assertSessionHasErrors('echeance');
+        $this->assertSame('paid', $echeance->fresh()->status);
+    }
+
+    public function test_manager_cannot_cancel_an_installment(): void
+    {
+        $manager = User::factory()->create();
+        $manager->assignRole('manager');
+
+        $student = User::factory()->create();
+        $student->assignRole('student');
+
+        $echeance = \App\Models\StudentPayment::create([
+            'student_id' => $student->id,
+            'amount'     => 50000,
+            'due_date'   => now()->addDays(10),
+            'status'     => 'pending',
+        ]);
+
+        $response = $this->actingAs($manager)->patch(
+            route('admin.echeances.annuler', $echeance),
+            ['motif' => 'Abandon de la formation']
+        );
+
+        $response->assertStatus(403);
+        $this->assertSame('pending', $echeance->fresh()->status);
+    }
+
+    public function test_admin_can_reactivate_a_cancelled_installment(): void
+    {
+        $student = User::factory()->create();
+        $student->assignRole('student');
+
+        $echeance = \App\Models\StudentPayment::create([
+            'student_id' => $student->id,
+            'amount'     => 50000,
+            'due_date'   => now()->addDays(10),
+            'status'     => 'cancelled',
+            'notes'      => '[01/09/2026] Annulée : test',
+        ]);
+
+        $response = $this->actingAs($this->getAdminUser())->patch(route('admin.echeances.reactiver', $echeance));
+
+        $response->assertRedirect();
+        $this->assertSame('pending', $echeance->fresh()->status);
+    }
+
+    public function test_reactivating_a_pending_installment_is_refused(): void
+    {
+        $student = User::factory()->create();
+        $student->assignRole('student');
+
+        $echeance = \App\Models\StudentPayment::create([
+            'student_id' => $student->id,
+            'amount'     => 50000,
+            'due_date'   => now()->addDays(10),
+            'status'     => 'pending',
+        ]);
+
+        $response = $this->actingAs($this->getAdminUser())->patch(route('admin.echeances.reactiver', $echeance));
+
+        $response->assertSessionHasErrors('echeance');
+        $this->assertSame('pending', $echeance->fresh()->status);
+    }
+
+    public function test_cancelled_installments_are_excluded_from_expected_and_overdue_totals(): void
+    {
+        $program = Program::factory()->create(['name' => 'Programme Annulation']);
+        $student = User::factory()->create(['name' => 'Apprenant Annulation']);
+        $student->assignRole('student');
+
+        // En retard, non reglee : comptee.
+        \App\Models\StudentPayment::create([
+            'student_id' => $student->id,
+            'program_id' => $program->id,
+            'amount'     => 40000,
+            'due_date'   => '2026-06-10',
+            'status'     => 'pending',
+        ]);
+
+        // Annulee, elle aussi en retard sur sa date : ne doit compter dans
+        // aucun des deux totaux, sinon les montants affiches sont faux.
+        \App\Models\StudentPayment::create([
+            'student_id' => $student->id,
+            'program_id' => $program->id,
+            'amount'     => 60000,
+            'due_date'   => '2026-06-05',
+            'status'     => 'cancelled',
+            'notes'      => 'Annulée : test',
+        ]);
+
+        $this->travelTo(\Carbon\Carbon::parse('2026-06-20'));
+
+        $response = $this->actingAs($this->getAdminUser())
+            ->get(route('admin.student-payments.index', ['month' => 6, 'year' => 2026]));
+
+        $response->assertStatus(200);
+        $response->assertViewHas('totalAttendu', 40000.0);
+        $response->assertViewHas('totalEnRetard', 40000.0);
+    }
+
+    public function test_cancelling_an_installment_does_not_reduce_the_student_balance(): void
+    {
+        $student = User::factory()->create();
+        $student->assignRole('student');
+
+        $plan = \App\Models\PaymentPlan::create([
+            'student_id'     => $student->id,
+            'total_amount'   => 300000,
+            'advance_amount' => 0,
+        ]);
+
+        $echeances = [];
+        foreach ([100000, 100000, 100000] as $montant) {
+            $echeances[] = \App\Models\StudentPayment::create([
+                'student_id'      => $student->id,
+                'payment_plan_id' => $plan->id,
+                'amount'          => $montant,
+                'due_date'        => now()->addDays(30),
+                'status'          => 'pending',
+            ]);
+        }
+
+        $soldeAvant = $this->actingAs($student)->get(route('student.dashboard'))
+            ->viewData('kpis')['solde_du'];
+        $this->assertEquals(300000, $soldeAvant);
+
+        $this->actingAs($this->getAdminUser())->patch(
+            route('admin.echeances.annuler', $echeances[0]),
+            ['motif' => 'Report de paiement']
+        );
+
+        // La regle metier interdit qu'annuler une echeance fasse baisser la
+        // dette : la somme reste due, elle sera replanifiee plus tard.
+        $soldeApres = $this->actingAs($student)->get(route('student.dashboard'))
+            ->viewData('kpis')['solde_du'];
+        $this->assertEquals(300000, $soldeApres);
+    }
+
+    public function test_balance_does_not_double_after_cancellation_and_replanning(): void
+    {
+        $student = User::factory()->create();
+        $student->assignRole('student');
+        $admin = $this->getAdminUser();
+
+        $plan = \App\Models\PaymentPlan::create([
+            'student_id'     => $student->id,
+            'total_amount'   => 300000,
+            'advance_amount' => 0,
+        ]);
+
+        $echeanceAnnulee = \App\Models\StudentPayment::create([
+            'student_id'      => $student->id,
+            'payment_plan_id' => $plan->id,
+            'amount'          => 100000,
+            'due_date'        => now()->addDays(10),
+            'status'          => 'pending',
+        ]);
+
+        \App\Models\StudentPayment::create([
+            'student_id'      => $student->id,
+            'payment_plan_id' => $plan->id,
+            'amount'          => 200000,
+            'due_date'        => now()->addDays(40),
+            'status'          => 'pending',
+        ]);
+
+        $this->actingAs($admin)->patch(
+            route('admin.echeances.annuler', $echeanceAnnulee),
+            ['motif' => 'Report de paiement']
+        );
+
+        // Replanification : l'administrateur ressaisit le plan, remplacant
+        // l'echeance annulee par une nouvelle echeance en attente pour le
+        // meme montant, a une nouvelle date.
+        $this->actingAs($admin)->post(route('admin.students.plan.store', $student), [
+            'total_amount'   => 300000,
+            'advance_amount' => 0,
+            'echeances'      => [
+                ['amount' => 100000, 'due_date' => now()->addDays(60)->format('Y-m-d')],
+                ['amount' => 200000, 'due_date' => now()->addDays(40)->format('Y-m-d')],
+            ],
+        ]);
+
+        $solde = $this->actingAs($student)->get(route('student.dashboard'))
+            ->viewData('kpis')['solde_du'];
+
+        // Le solde ne double pas : l'ancienne echeance annulee et la
+        // nouvelle echeance replanifiee ne representent qu'une seule dette.
+        $this->assertEquals(300000, $solde);
+    }
+
+    public function test_cancelled_installment_survives_plan_resubmission(): void
+    {
+        $student = User::factory()->create();
+        $student->assignRole('student');
+        $admin = $this->getAdminUser();
+
+        $plan = \App\Models\PaymentPlan::create([
+            'student_id'     => $student->id,
+            'total_amount'   => 100000,
+            'advance_amount' => 0,
+        ]);
+
+        $echeance = \App\Models\StudentPayment::create([
+            'student_id'      => $student->id,
+            'payment_plan_id' => $plan->id,
+            'amount'          => 100000,
+            'due_date'        => now()->addDays(10),
+            'status'          => 'pending',
+        ]);
+
+        $this->actingAs($admin)->patch(
+            route('admin.echeances.annuler', $echeance),
+            ['motif' => 'Report de paiement']
+        );
+
+        $this->actingAs($admin)->post(route('admin.students.plan.store', $student), [
+            'total_amount'   => 100000,
+            'advance_amount' => 0,
+            'echeances'      => [
+                ['amount' => 100000, 'due_date' => now()->addDays(60)->format('Y-m-d')],
+            ],
+        ]);
+
+        $echeance->refresh();
+        $this->assertSame('cancelled', $echeance->status);
+        $this->assertStringContainsString('Report de paiement', $echeance->notes);
+    }
+
+    public function test_student_and_admin_balances_match(): void
+    {
+        $student = User::factory()->create();
+        $student->assignRole('student');
+        $admin = $this->getAdminUser();
+
+        $plan = \App\Models\PaymentPlan::create([
+            'student_id'     => $student->id,
+            'total_amount'   => 250000,
+            'advance_amount' => 50000,
+        ]);
+
+        \App\Models\StudentPayment::create([
+            'student_id'      => $student->id,
+            'payment_plan_id' => $plan->id,
+            'amount'          => 100000,
+            'due_date'        => now()->subDays(5),
+            'paid_date'       => now()->subDays(5),
+            'status'          => 'paid',
+        ]);
+
+        \App\Models\StudentPayment::create([
+            'student_id'      => $student->id,
+            'payment_plan_id' => $plan->id,
+            'amount'          => 100000,
+            'due_date'        => now()->addDays(20),
+            'status'          => 'pending',
+        ]);
+
+        $adminResponse = $this->actingAs($admin)->get(route('admin.students.plan.edit', $student));
+        $adminSolde = $adminResponse->viewData('plan')->soldeRestant();
+
+        $studentResponse = $this->actingAs($student)->get(route('student.dashboard'));
+        $studentSolde = $studentResponse->viewData('kpis')['solde_du'];
+
+        $this->assertEquals(100000, $adminSolde);
+        $this->assertEquals($adminSolde, $studentSolde);
     }
 }

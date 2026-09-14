@@ -19,6 +19,16 @@
                 </div>
             @endif
 
+            @if ($errors->any())
+                <div class="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative">
+                    <ul>
+                        @foreach ($errors->all() as $error)
+                            <li>- {{ $error }}</li>
+                        @endforeach
+                    </ul>
+                </div>
+            @endif
+
             <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                 <div class="p-6 text-gray-900">
                     <x-search-bar placeholder="Rechercher par titre..." />
@@ -37,7 +47,7 @@
                         </thead>
                         <tbody>
                             @forelse($assignments as $assignment)
-                                <tr>
+                                <tr x-data="{ openProlonger: false }">
                                     <td class="border-b py-2 px-4 font-medium">{{ $assignment->title }}</td>
                                     <td class="border-b py-2 px-4">{{ $assignment->courseClass->name ?? 'N/A' }}</td>
                                     <td class="border-b py-2 px-4">{{ $assignment->student->name ?? 'Toute la classe' }}</td>
@@ -58,6 +68,11 @@
                                         <a href="{{ route('manager.evaluations.index', $assignment) }}" class="text-green-600 hover:underline">Évaluer ({{ $assignment->submissions()->count() }})</a>
                                         <span class="text-gray-300">|</span>
                                         <a href="{{ route('manager.assignments.edit', $assignment) }}" class="text-indigo-600 hover:underline">Modifier</a>
+                                        <span class="text-gray-300">|</span>
+                                        <x-prolonger-delai-modal
+                                            :action="route('manager.assignments.prolonger', $assignment)"
+                                            label="S'applique à toute la classe : seuls les apprenants n'ayant encore rien déposé seront concernés."
+                                        />
                                         <span class="text-gray-300">|</span>
                                         <form action="{{ route('manager.assignments.destroy', $assignment) }}" method="POST" onsubmit="return confirm('Supprimer ce devoir ?');">
                                             @csrf
