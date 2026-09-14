@@ -158,8 +158,10 @@ class StudentTest extends TestCase
         ]);
     }
 
-    public function test_cancelled_installment_is_excluded_from_the_balance_due(): void
+    public function test_cancelled_installment_is_excluded_from_the_balance_due_without_a_plan(): void
     {
+        // Echeances isolees, sans plan de paiement (payment_plan_id nul) :
+        // seul cas ou le solde apprenant reste une somme d'echeances.
         $student = $this->getStudentUser();
 
         \App\Models\StudentPayment::create([

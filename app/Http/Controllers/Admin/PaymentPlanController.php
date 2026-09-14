@@ -102,12 +102,14 @@ class PaymentPlanController extends Controller
                     'notes'          => $valide['notes'] ?? null,
                 ]);
 
-                // Les echeances deja reglees sont conservees telles quelles :
-                // seules celles restant a payer sont remplacees. Une echeance
-                // annulee est egalement remplacee ici (elle n'est pas "paid") :
-                // ressaisir tout l'echeancier efface son motif d'annulation,
-                // au meme titre qu'il efface les echeances pending non reprises.
-                $plan->echeances()->where('status', '!=', 'paid')->delete();
+                // Seules les echeances en attente sont remplacees. Les
+                // reglees sont conservees car deja encaissees ; les annulees
+                // le sont aussi, avec leur motif, sinon l'historique qu'on
+                // vient d'ajouter disparaitrait au premier reajustement du
+                // calendrier. La somme qu'elles representaient reste due
+                // (regle du point 1 du 14/09/2026) : c'est a l'administrateur
+                // de la replanifier via une nouvelle echeance pending.
+                $plan->echeances()->where('status', 'pending')->delete();
             } else {
                 $plan = PaymentPlan::create([
                     'student_id'     => $student->id,

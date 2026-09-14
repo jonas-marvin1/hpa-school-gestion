@@ -40,7 +40,13 @@ class StudentPaymentController extends Controller
         // previsionnelle doit rester complete meme quand on affiche une
         // seule categorie.
         // Une echeance annulee est exclue de tous les totaux : elle n'est
-        // plus attendue, ni reglee, ni en retard.
+        // plus attendue, ni reglee, ni en retard. Ceci reste correct avec la
+        // regle du point 1 du 14/09/2026 (annuler ne supprime pas la dette,
+        // qui sera replanifiee) : attendu/en retard decrivent ce qui est du
+        // a une date precise, et une echeance annulee n'a plus de date. La
+        // dette totale, elle, reste visible via PaymentPlan::soldeRestant()
+        // (page du plan et tableau de bord apprenant), independamment de
+        // cette vue mensuelle.
         $echeancesDuMois = (clone $base)->get(['status', 'due_date', 'amount'])
             ->where('status', '!=', 'cancelled');
         $totalAttendu = (float) $echeancesDuMois->sum('amount');
