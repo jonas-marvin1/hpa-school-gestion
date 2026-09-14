@@ -103,7 +103,8 @@ class StudentTest extends TestCase
             'course_class_id' => $class->id,
             'coach_id' => $coach->id,
             'title' => 'Test Assignment',
-            'type' => 'text'
+            'type' => 'text',
+            'due_date' => now()->addDays(3),
         ]);
 
         $response = $this->actingAs($student)->post(route('student.assignments.submit', $assignment), [

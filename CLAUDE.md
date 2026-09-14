@@ -123,6 +123,13 @@ nouveaux développements mêlés).
 filtres : années présentes en base, plus l'année en cours, plus l'année
 suivante. Tout nouveau filtre par année doit l'utiliser.
 
+La date limite effective d'un devoir pour un apprenant donné se lit par
+`Assignment::dateLimitePour($apprenant)`, jamais par `due_date` en direct :
+une prolongation de délai (fiche du 14/09/2026, point 3) peut la modifier
+pour un seul apprenant, sans toucher au `due_date` du devoir. Toute décision
+de retard (vue, rappel automatique, contrôle du dépôt) doit passer par
+cette méthode.
+
 ## Dette technique connue
 
 - Scripts ad hoc à la racine (`fix_tables.php`, `update_migrations.php`,

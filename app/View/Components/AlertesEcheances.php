@@ -83,26 +83,39 @@ class AlertesEcheances extends Component
 
         $rendus = Submission::where('student_id', $student->id)->pluck('assignment_id');
 
+        // La date limite effective depend d'une eventuelle prolongation
+        // individuelle (fiche du 14/09/2026, point 3) : le filtre sur
+        // due_date ne peut donc plus se faire en SQL, il faut charger les
+        // devoirs candidats puis calculer/filtrer en PHP via dateLimitePour().
+        //
+        // Le filtre sur student_id manquait ici avant ce point : un devoir
+        // nominatif attribue a un autre apprenant de la meme classe
+        // declenchait quand meme une alerte, alors qu'il n'est meme pas
+        // visible dans sa liste de devoirs.
         $devoirs = Assignment::whereIn('course_class_id', $classIds)
             ->whereNotNull('due_date')
             ->whereNotIn('id', $rendus)
-            ->where('due_date', '<=', now()->addDays(self::PREAVIS_DEVOIR_JOURS))
-            ->orderBy('due_date')
-            ->get();
+            ->where(function ($q) use ($student) {
+                $q->whereNull('student_id')->orWhere('student_id', $student->id);
+            })
+            ->get()
+            ->map(fn ($devoir) => [$devoir, $devoir->dateLimitePour($student)])
+            ->filter(fn ($paire) => $paire[1]->lte(now()->addDays(self::PREAVIS_DEVOIR_JOURS)))
+            ->sortBy(fn ($paire) => $paire[1]);
 
         $alertes = [];
 
-        foreach ($devoirs as $devoir) {
-            $echu  = $devoir->due_date->isPast();
-            $jours = (int) now()->startOfDay()->diffInDays($devoir->due_date, false);
+        foreach ($devoirs as [$devoir, $echeance]) {
+            $echu  = $echeance->isPast();
+            $jours = (int) now()->startOfDay()->diffInDays($echeance, false);
 
             $alertes[] = [
                 'niveau'  => $echu ? 'danger' : 'avertissement',
                 'titre'   => $echu ? 'Devoir en retard' : 'Devoir à rendre bientôt',
                 'message' => '« ' . $devoir->title . ' » '
                     . ($echu
-                        ? 'devait être rendu le ' . $devoir->due_date->format('d/m/Y') . '.'
-                        : 'est à rendre le ' . $devoir->due_date->format('d/m/Y')
+                        ? 'devait être rendu le ' . $echeance->format('d/m/Y') . '.'
+                        : 'est à rendre le ' . $echeance->format('d/m/Y')
                             . ($jours === 0 ? " (aujourd'hui)." : ' (dans ' . $jours . ' jour' . ($jours > 1 ? 's' : '') . ').')),
                 'lien'      => route('student.assignments.index'),
                 'lienLabel' => 'Voir mes devoirs',

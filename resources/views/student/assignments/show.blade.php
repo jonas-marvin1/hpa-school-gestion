@@ -31,11 +31,20 @@
                             <h3 class="text-2xl font-bold text-gray-800">{{ $assignment->title }}</h3>
                             <p class="text-sm text-gray-500 mt-1">Matière / Classe : {{ $assignment->courseClass->name }}</p>
                         </div>
+                        @php
+                            $dateLimite = $assignment->dateLimitePour(auth()->user());
+                            $delaiProlonge = ! $dateLimite->equalTo(\Carbon\Carbon::parse($assignment->due_date));
+                        @endphp
                         <div class="text-right">
                             <span class="block text-sm font-semibold text-gray-600">À rendre avant le :</span>
-                            <span class="block text-lg font-bold {{ \Carbon\Carbon::parse($assignment->due_date)->isPast() && !$submission ? 'text-red-600' : 'text-gray-900' }}">
-                                {{ \Carbon\Carbon::parse($assignment->due_date)->format('d/m/Y') }}
+                            <span class="block text-lg font-bold {{ $dateLimite->isPast() && !$submission ? 'text-red-600' : 'text-gray-900' }}">
+                                {{ $dateLimite->format('d/m/Y à H:i') }}
                             </span>
+                            @if($delaiProlonge)
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800 mt-1">
+                                    Délai prolongé
+                                </span>
+                            @endif
                         </div>
                     </div>
 
@@ -108,12 +117,20 @@
                         @endif
                     </div>
                 </div>
+            @elseif($dateLimite->isPast())
+                <!-- Date limite depassee, aucun rendu depose -->
+                <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg border-l-4 border-red-500">
+                    <div class="p-6 text-gray-900">
+                        <h3 class="text-lg font-bold text-red-700 mb-2">Date limite dépassée</h3>
+                        <p class="text-sm text-gray-600">Le dépôt n'est plus possible pour ce devoir.</p>
+                    </div>
+                </div>
             @else
                 <!-- Form to Submit -->
                 <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                     <div class="p-6 text-gray-900">
                         <h3 class="text-lg font-bold text-gray-800 mb-4">Soumettre votre travail</h3>
-                        
+
                         <form action="{{ route('student.assignments.submit', $assignment) }}" method="POST" enctype="multipart/form-data">
                             @csrf
                             
