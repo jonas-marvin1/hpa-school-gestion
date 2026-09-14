@@ -103,7 +103,10 @@ class PaymentPlanController extends Controller
                 ]);
 
                 // Les echeances deja reglees sont conservees telles quelles :
-                // seules celles restant a payer sont remplacees.
+                // seules celles restant a payer sont remplacees. Une echeance
+                // annulee est egalement remplacee ici (elle n'est pas "paid") :
+                // ressaisir tout l'echeancier efface son motif d'annulation,
+                // au meme titre qu'il efface les echeances pending non reprises.
                 $plan->echeances()->where('status', '!=', 'paid')->delete();
             } else {
                 $plan = PaymentPlan::create([
@@ -141,6 +144,52 @@ class PaymentPlanController extends Controller
         ]);
 
         return back()->with('status', 'Échéance marquée comme réglée.');
+    }
+
+    /**
+     * Annule une echeance en attente, motif obligatoire a l'appui.
+     *
+     * Une echeance deja reglee est refusee : l'annuler ne serait pas une
+     * annulation mais un remboursement, une operation comptable differente
+     * qu'on traitera separement si le besoin s'en presente un jour.
+     */
+    public function annuler(Request $request, StudentPayment $echeance)
+    {
+        if ($echeance->status !== 'pending') {
+            throw ValidationException::withMessages([
+                'echeance' => 'Seule une échéance en attente peut être annulée.',
+            ]);
+        }
+
+        $valide = $request->validate([
+            'motif' => 'required|string|max:255',
+        ], [], ['motif' => 'motif']);
+
+        // Le motif s'ajoute aux notes existantes plutot que de les remplacer,
+        // prefixe par la date : c'est la seule trace de ce qui s'est passe
+        // pour qui reprendra le dossier dans deux ans.
+        $entree = sprintf('[%s] Annulée : %s', now()->format('d/m/Y'), $valide['motif']);
+
+        $echeance->update([
+            'status' => 'cancelled',
+            'notes'  => trim(($echeance->notes ? $echeance->notes."\n" : '').$entree),
+        ]);
+
+        return back()->with('status', 'Échéance annulée.');
+    }
+
+    /** Remet une echeance annulee en attente. */
+    public function reactiver(StudentPayment $echeance)
+    {
+        if ($echeance->status !== 'cancelled') {
+            throw ValidationException::withMessages([
+                'echeance' => 'Seule une échéance annulée peut être réactivée.',
+            ]);
+        }
+
+        $echeance->update(['status' => 'pending']);
+
+        return back()->with('status', 'Échéance réactivée.');
     }
 
     /**

@@ -64,13 +64,15 @@ class PaymentPlan extends Model
     }
 
     /**
-     * Prochaine echeance a honorer : la plus ancienne non reglee.
+     * Prochaine echeance a honorer : la plus ancienne en attente.
      * Elle peut deja etre echue, auquel cas c'est bien elle qui est due.
+     * Une echeance annulee n'est pas due : elle est exclue, sinon elle
+     * apparaitrait comme la prochaine a payer.
      */
     public function prochaineEcheance(): ?StudentPayment
     {
         return $this->echeances()
-            ->where('status', '!=', 'paid')
+            ->where('status', 'pending')
             ->orderBy('due_date')
             ->first();
     }

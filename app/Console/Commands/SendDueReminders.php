@@ -105,6 +105,9 @@ class SendDueReminders extends Command
         $aVenir = collect(self::REMINDER_OFFSETS_DAYS)
             ->map(fn ($offset) => now()->addDays($offset)->toDateString());
 
+        // Le filtre status = 'pending' exclut deja les echeances annulees
+        // sans modification necessaire ici : une fois annulee, une echeance
+        // cesse d'elle-meme d'etre relancee.
         $echeances = StudentPayment::where('status', 'pending')
             ->where(function ($q) use ($aVenir) {
                 $q->whereIn(DB::raw('DATE(due_date)'), $aVenir->all())

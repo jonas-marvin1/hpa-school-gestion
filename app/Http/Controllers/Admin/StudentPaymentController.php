@@ -39,11 +39,14 @@ class StudentPaymentController extends Controller
         // statut, qui ne sert qu'a affiner le tableau) : la vision
         // previsionnelle doit rester complete meme quand on affiche une
         // seule categorie.
-        $echeancesDuMois = (clone $base)->get(['status', 'due_date', 'amount']);
+        // Une echeance annulee est exclue de tous les totaux : elle n'est
+        // plus attendue, ni reglee, ni en retard.
+        $echeancesDuMois = (clone $base)->get(['status', 'due_date', 'amount'])
+            ->where('status', '!=', 'cancelled');
         $totalAttendu = (float) $echeancesDuMois->sum('amount');
         $totalRegle = (float) $echeancesDuMois->where('status', 'paid')->sum('amount');
         $totalEnRetard = (float) $echeancesDuMois
-            ->filter(fn ($e) => $e->status !== 'paid' && $e->due_date->isPast())
+            ->filter(fn ($e) => $e->status === 'pending' && $e->due_date->isPast())
             ->sum('amount');
         $totalAVenir = max(0, $totalAttendu - $totalRegle - $totalEnRetard);
 

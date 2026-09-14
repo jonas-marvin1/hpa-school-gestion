@@ -118,8 +118,10 @@ class DashboardController extends Controller
                                         ->where('status', '!=', 'cancelled')
                                         ->count(),
             'programmes'          => $programmes->count(),
+            // Une echeance annulee n'est pas due : la compter gonflerait la
+            // dette affichee a l'apprenant.
             'solde_du'            => \App\Models\StudentPayment::where('student_id', $student->id)
-                                        ->where('status', '!=', 'paid')
+                                        ->where('status', 'pending')
                                         ->sum('amount'),
         ];
 

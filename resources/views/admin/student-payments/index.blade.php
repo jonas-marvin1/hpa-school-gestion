@@ -41,6 +41,7 @@
                                 <option value="paid" {{ request('status') === 'paid' ? 'selected' : '' }}>Payé</option>
                                 <option value="pending" {{ request('status') === 'pending' ? 'selected' : '' }}>En attente</option>
                                 <option value="overdue" {{ request('status') === 'overdue' ? 'selected' : '' }}>En retard</option>
+                                <option value="cancelled" {{ request('status') === 'cancelled' ? 'selected' : '' }}>Annulée</option>
                             </select>
                         </div>
 
@@ -110,6 +111,8 @@
                                     <td class="border-b py-3 px-4 text-center">
                                         @if($paiement->status === 'paid')
                                             <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Payé</span>
+                                        @elseif($paiement->status === 'cancelled')
+                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-200 text-gray-700">Annulée</span>
                                         @elseif($paiement->due_date->isPast())
                                             <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">En retard</span>
                                         @else

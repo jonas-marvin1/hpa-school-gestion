@@ -65,6 +65,11 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->grou
     Route::get('/apprenants/{student}/plan-paiement', [\App\Http\Controllers\Admin\PaymentPlanController::class, 'edit'])->name('students.plan.edit');
     Route::post('/apprenants/{student}/plan-paiement', [\App\Http\Controllers\Admin\PaymentPlanController::class, 'store'])->name('students.plan.store');
     Route::patch('/echeances/{echeance}/payee', [\App\Http\Controllers\Admin\PaymentPlanController::class, 'marquerPayee'])->name('echeances.payee');
+    // Annulation reservee a l'administrateur : la gestionnaire consulte les
+    // echeances mais ne decaisse ni n'annule (meme repartition des roles
+    // qu'au point 7 du 13/08/2026 pour les fiches de paie).
+    Route::patch('/echeances/{echeance}/annuler', [\App\Http\Controllers\Admin\PaymentPlanController::class, 'annuler'])->name('echeances.annuler');
+    Route::patch('/echeances/{echeance}/reactiver', [\App\Http\Controllers\Admin\PaymentPlanController::class, 'reactiver'])->name('echeances.reactiver');
 
     // Vision previsionnelle des paiements attendus, tous apprenants
     // confondus, mois par mois (point 6).

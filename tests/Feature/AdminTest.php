@@ -373,4 +373,165 @@ class AdminTest extends TestCase
         $response->assertSee('Alice Paiement');
         $response->assertDontSee('Bob Paiement');
     }
+
+    public function test_admin_can_cancel_a_pending_installment_with_a_reason(): void
+    {
+        $student = User::factory()->create();
+        $student->assignRole('student');
+
+        $echeance = \App\Models\StudentPayment::create([
+            'student_id' => $student->id,
+            'amount'     => 50000,
+            'due_date'   => now()->addDays(10),
+            'status'     => 'pending',
+        ]);
+
+        $response = $this->actingAs($this->getAdminUser())->patch(
+            route('admin.echeances.annuler', $echeance),
+            ['motif' => 'Abandon de la formation']
+        );
+
+        $response->assertRedirect();
+        $echeance->refresh();
+        $this->assertSame('cancelled', $echeance->status);
+        $this->assertStringContainsString('Abandon de la formation', $echeance->notes);
+        $this->assertStringContainsString(now()->format('d/m/Y'), $echeance->notes);
+    }
+
+    public function test_cancelling_a_pending_installment_without_a_reason_is_refused(): void
+    {
+        $student = User::factory()->create();
+        $student->assignRole('student');
+
+        $echeance = \App\Models\StudentPayment::create([
+            'student_id' => $student->id,
+            'amount'     => 50000,
+            'due_date'   => now()->addDays(10),
+            'status'     => 'pending',
+        ]);
+
+        $response = $this->actingAs($this->getAdminUser())->patch(route('admin.echeances.annuler', $echeance), []);
+
+        $response->assertSessionHasErrors('motif');
+        $this->assertSame('pending', $echeance->fresh()->status);
+    }
+
+    public function test_cancelling_an_already_paid_installment_is_refused(): void
+    {
+        $student = User::factory()->create();
+        $student->assignRole('student');
+
+        $echeance = \App\Models\StudentPayment::create([
+            'student_id' => $student->id,
+            'amount'     => 50000,
+            'due_date'   => now()->subDays(5),
+            'paid_date'  => now()->subDays(5),
+            'status'     => 'paid',
+        ]);
+
+        $response = $this->actingAs($this->getAdminUser())->patch(
+            route('admin.echeances.annuler', $echeance),
+            ['motif' => 'Erreur de saisie']
+        );
+
+        $response->assertSessionHasErrors('echeance');
+        $this->assertSame('paid', $echeance->fresh()->status);
+    }
+
+    public function test_manager_cannot_cancel_an_installment(): void
+    {
+        $manager = User::factory()->create();
+        $manager->assignRole('manager');
+
+        $student = User::factory()->create();
+        $student->assignRole('student');
+
+        $echeance = \App\Models\StudentPayment::create([
+            'student_id' => $student->id,
+            'amount'     => 50000,
+            'due_date'   => now()->addDays(10),
+            'status'     => 'pending',
+        ]);
+
+        $response = $this->actingAs($manager)->patch(
+            route('admin.echeances.annuler', $echeance),
+            ['motif' => 'Abandon de la formation']
+        );
+
+        $response->assertStatus(403);
+        $this->assertSame('pending', $echeance->fresh()->status);
+    }
+
+    public function test_admin_can_reactivate_a_cancelled_installment(): void
+    {
+        $student = User::factory()->create();
+        $student->assignRole('student');
+
+        $echeance = \App\Models\StudentPayment::create([
+            'student_id' => $student->id,
+            'amount'     => 50000,
+            'due_date'   => now()->addDays(10),
+            'status'     => 'cancelled',
+            'notes'      => '[01/09/2026] Annulée : test',
+        ]);
+
+        $response = $this->actingAs($this->getAdminUser())->patch(route('admin.echeances.reactiver', $echeance));
+
+        $response->assertRedirect();
+        $this->assertSame('pending', $echeance->fresh()->status);
+    }
+
+    public function test_reactivating_a_pending_installment_is_refused(): void
+    {
+        $student = User::factory()->create();
+        $student->assignRole('student');
+
+        $echeance = \App\Models\StudentPayment::create([
+            'student_id' => $student->id,
+            'amount'     => 50000,
+            'due_date'   => now()->addDays(10),
+            'status'     => 'pending',
+        ]);
+
+        $response = $this->actingAs($this->getAdminUser())->patch(route('admin.echeances.reactiver', $echeance));
+
+        $response->assertSessionHasErrors('echeance');
+        $this->assertSame('pending', $echeance->fresh()->status);
+    }
+
+    public function test_cancelled_installments_are_excluded_from_expected_and_overdue_totals(): void
+    {
+        $program = Program::factory()->create(['name' => 'Programme Annulation']);
+        $student = User::factory()->create(['name' => 'Apprenant Annulation']);
+        $student->assignRole('student');
+
+        // En retard, non reglee : comptee.
+        \App\Models\StudentPayment::create([
+            'student_id' => $student->id,
+            'program_id' => $program->id,
+            'amount'     => 40000,
+            'due_date'   => '2026-06-10',
+            'status'     => 'pending',
+        ]);
+
+        // Annulee, elle aussi en retard sur sa date : ne doit compter dans
+        // aucun des deux totaux, sinon les montants affiches sont faux.
+        \App\Models\StudentPayment::create([
+            'student_id' => $student->id,
+            'program_id' => $program->id,
+            'amount'     => 60000,
+            'due_date'   => '2026-06-05',
+            'status'     => 'cancelled',
+            'notes'      => 'Annulée : test',
+        ]);
+
+        $this->travelTo(\Carbon\Carbon::parse('2026-06-20'));
+
+        $response = $this->actingAs($this->getAdminUser())
+            ->get(route('admin.student-payments.index', ['month' => 6, 'year' => 2026]));
+
+        $response->assertStatus(200);
+        $response->assertViewHas('totalAttendu', 40000.0);
+        $response->assertViewHas('totalEnRetard', 40000.0);
+    }
 }
