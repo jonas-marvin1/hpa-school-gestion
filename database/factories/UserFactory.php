@@ -30,6 +30,13 @@ class UserFactory extends Factory
             'email_verified_at' => now(),
             'password' => static::$password ??= Hash::make('password'),
             'remember_token' => Str::random(10),
+            // Explicite plutot que laisse au defaut SQL de la colonne : un
+            // modele cree par la factory (create()) n'est pas rafraichi
+            // depuis la base, donc un defaut applique cote SQL resterait
+            // absent en memoire (attribut a null) tant qu'il n'est pas
+            // repris ici — visible depuis EnsureUserIsActive, qui verrait
+            // alors un compte "actif" en base comme inactif en session.
+            'status' => 'active',
         ];
     }
 

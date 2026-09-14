@@ -51,6 +51,19 @@ class LoginRequest extends FormRequest
         }
 
         RateLimiter::clear($this->throttleKey());
+
+        // Premier des deux verrous : le second (middleware EnsureUserIsActive)
+        // coupe une session deja ouverte si le compte est desactive en cours
+        // de route. Les identifiants sont corrects mais le compte est bloque :
+        // on annule la connexion plutot que de laisser Auth::attempt() ouvrir
+        // une session qui serait immediatement coupee a la requete suivante.
+        if (Auth::user()->status !== 'active') {
+            Auth::logout();
+
+            throw ValidationException::withMessages([
+                'email' => "Votre compte a été désactivé. Contactez l'administration de l'école.",
+            ]);
+        }
     }
 
     /**

@@ -72,6 +72,22 @@ class AdminTest extends TestCase
         $this->assertTrue($user->fresh()->hasRole('coach'));
     }
 
+    public function test_admin_cannot_deactivate_their_own_account(): void
+    {
+        $admin = $this->getAdminUser();
+
+        $response = $this->actingAs($admin)->put(route('admin.users.update', $admin->id), [
+            'name' => $admin->name,
+            'email' => $admin->email,
+            'role' => 'admin',
+            'status' => 'inactive',
+        ]);
+
+        $response->assertRedirect(route('admin.users.edit', $admin));
+        $response->assertSessionHasErrors('status');
+        $this->assertSame('active', $admin->fresh()->status);
+    }
+
     public function test_admin_can_delete_user(): void
     {
         $user = User::factory()->create();
