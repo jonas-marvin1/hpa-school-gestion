@@ -149,7 +149,10 @@ class PaymentPlanController extends Controller
     }
 
     /**
-     * Annule une echeance en attente, motif obligatoire a l'appui.
+     * Annule une echeance en attente. Le motif est facultatif : ce qui
+     * protege le geste, c'est la fenetre de confirmation cote vue, pas une
+     * saisie obligatoire (correctif du 14/09/2026, la premiere version
+     * exigeait un motif que la vue ne demandait jamais).
      *
      * Une echeance deja reglee est refusee : l'annuler ne serait pas une
      * annulation mais un remboursement, une operation comptable differente
@@ -164,13 +167,16 @@ class PaymentPlanController extends Controller
         }
 
         $valide = $request->validate([
-            'motif' => 'required|string|max:255',
+            'motif' => 'nullable|string|max:255',
         ], [], ['motif' => 'motif']);
 
         // Le motif s'ajoute aux notes existantes plutot que de les remplacer,
         // prefixe par la date : c'est la seule trace de ce qui s'est passe
-        // pour qui reprendra le dossier dans deux ans.
-        $entree = sprintf('[%s] Annulée : %s', now()->format('d/m/Y'), $valide['motif']);
+        // pour qui reprendra le dossier dans deux ans. Sans motif, la date
+        // et l'auteur (trace par ailleurs) suffisent a retracer l'operation.
+        $entree = filled($valide['motif'] ?? null)
+            ? sprintf('[%s] Annulée : %s', now()->format('d/m/Y'), $valide['motif'])
+            : sprintf('[%s] Annulée', now()->format('d/m/Y'));
 
         $echeance->update([
             'status' => 'cancelled',

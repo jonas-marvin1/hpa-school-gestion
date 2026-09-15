@@ -76,7 +76,7 @@
                                     </thead>
                                     <tbody>
                                         @foreach($plan->echeances as $e)
-                                            <tr>
+                                            <tr x-data="{ openAnnuler: false, openReactiver: false }">
                                                 <td class="border-b py-2 px-3">{{ $e->due_date->format('d/m/Y') }}</td>
                                                 <td class="border-b py-2 px-3 text-right font-medium">{{ number_format($e->amount, 0, ',', ' ') }}</td>
                                                 <td class="border-b py-2 px-3 text-center">
@@ -103,24 +103,76 @@
                                                                 @method('PATCH')
                                                                 <button type="submit" class="text-indigo-600 hover:underline">Marquer réglée</button>
                                                             </form>
-                                                            {{-- Motif demande via prompt() : meme idiome que les confirm()
-                                                                 du reste de l'appli, $el.submit() n'y redeclenche pas
-                                                                 l'evenement submit (contrairement a $el.requestSubmit()). --}}
-                                                            <form method="POST" action="{{ route('admin.echeances.annuler', $e) }}" class="inline"
-                                                                  @submit.prevent="if ($el.querySelector('input[name=motif]').value = prompt('Motif de l\'annulation :')) { $el.submit(); }">
-                                                                @csrf
-                                                                @method('PATCH')
-                                                                <input type="hidden" name="motif">
-                                                                <button type="submit" class="text-red-600 hover:underline">Annuler</button>
-                                                            </form>
+                                                            <button type="button" @click="openAnnuler = true" class="text-red-600 hover:underline">Annuler</button>
+
+                                                            {{-- Fenetre de l'application, sur le modele de
+                                                                 x-prolonger-delai-modal : ni prompt() ni confirm(),
+                                                                 le motif reste facultatif (correctif du 14/09/2026). --}}
+                                                            <div x-show="openAnnuler" class="fixed inset-0 z-50 overflow-y-auto" style="display: none;" role="dialog" aria-modal="true">
+                                                                <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+                                                                    <div x-show="openAnnuler" x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="ease-in duration-200" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" @click="openAnnuler = false" aria-hidden="true"></div>
+
+                                                                    <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+
+                                                                    <div x-show="openAnnuler" x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95" x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100" x-transition:leave="ease-in duration-200" x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100" x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95" class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full whitespace-normal">
+                                                                        <form method="POST" action="{{ route('admin.echeances.annuler', $e) }}">
+                                                                            @csrf
+                                                                            @method('PATCH')
+                                                                            <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                                                                                <h3 class="text-lg leading-6 font-medium text-gray-900 mb-2">Annuler l'échéance</h3>
+                                                                                <p class="text-sm text-gray-500 mb-4">
+                                                                                    {{ $e->due_date->format('d/m/Y') }} — {{ number_format($e->amount, 0, ',', ' ') }} {{ $plan->currency }}
+                                                                                </p>
+
+                                                                                <div class="mb-2">
+                                                                                    <label class="block text-sm font-medium text-gray-700 mb-1">Motif (facultatif)</label>
+                                                                                    <textarea name="motif" rows="3" maxlength="255" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"></textarea>
+                                                                                </div>
+                                                                            </div>
+                                                                            <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse gap-2">
+                                                                                <button type="submit" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 sm:w-auto sm:text-sm">
+                                                                                    Confirmer l'annulation
+                                                                                </button>
+                                                                                <button type="button" @click="openAnnuler = false" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 sm:mt-0 sm:w-auto sm:text-sm">
+                                                                                    Fermer
+                                                                                </button>
+                                                                            </div>
+                                                                        </form>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
                                                         </div>
                                                     @elseif($e->status === 'cancelled')
-                                                        <form method="POST" action="{{ route('admin.echeances.reactiver', $e) }}" class="inline"
-                                                              @submit.prevent="if (confirm('Réactiver cette échéance ?')) { $el.submit(); }">
-                                                            @csrf
-                                                            @method('PATCH')
-                                                            <button type="submit" class="text-indigo-600 hover:underline">Réactiver</button>
-                                                        </form>
+                                                        <button type="button" @click="openReactiver = true" class="text-indigo-600 hover:underline">Réactiver</button>
+
+                                                        <div x-show="openReactiver" class="fixed inset-0 z-50 overflow-y-auto" style="display: none;" role="dialog" aria-modal="true">
+                                                            <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+                                                                <div x-show="openReactiver" x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="ease-in duration-200" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" @click="openReactiver = false" aria-hidden="true"></div>
+
+                                                                <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+
+                                                                <div x-show="openReactiver" x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95" x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100" x-transition:leave="ease-in duration-200" x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100" x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95" class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full whitespace-normal">
+                                                                    <form method="POST" action="{{ route('admin.echeances.reactiver', $e) }}">
+                                                                        @csrf
+                                                                        @method('PATCH')
+                                                                        <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                                                                            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-2">Réactiver l'échéance</h3>
+                                                                            <p class="text-sm text-gray-500 mb-4">
+                                                                                {{ $e->due_date->format('d/m/Y') }} — {{ number_format($e->amount, 0, ',', ' ') }} {{ $plan->currency }}
+                                                                            </p>
+                                                                        </div>
+                                                                        <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse gap-2">
+                                                                            <button type="submit" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-indigo-600 text-base font-medium text-white hover:bg-indigo-700 sm:w-auto sm:text-sm">
+                                                                                Confirmer la réactivation
+                                                                            </button>
+                                                                            <button type="button" @click="openReactiver = false" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 sm:mt-0 sm:w-auto sm:text-sm">
+                                                                                Fermer
+                                                                            </button>
+                                                                        </div>
+                                                                    </form>
+                                                                </div>
+                                                            </div>
+                                                        </div>
                                                     @else
                                                         <span class="text-xs text-gray-400">{{ $e->paid_date?->format('d/m/Y') }}</span>
                                                     @endif

@@ -414,7 +414,37 @@ class AdminTest extends TestCase
         $this->assertStringContainsString(now()->format('d/m/Y'), $echeance->notes);
     }
 
-    public function test_cancelling_a_pending_installment_without_a_reason_is_refused(): void
+    public function test_payment_plan_page_renders_the_cancellation_confirmation_window(): void
+    {
+        $student = User::factory()->create();
+        $student->assignRole('student');
+
+        $plan = \App\Models\PaymentPlan::create([
+            'student_id'     => $student->id,
+            'total_amount'   => 50000,
+            'advance_amount' => 0,
+        ]);
+
+        \App\Models\StudentPayment::create([
+            'student_id'      => $student->id,
+            'payment_plan_id' => $plan->id,
+            'amount'          => 50000,
+            'due_date'        => now()->addDays(10),
+            'status'          => 'pending',
+        ]);
+
+        $response = $this->actingAs($this->getAdminUser())->get(route('admin.students.plan.edit', $student));
+
+        $response->assertOk();
+        $response->assertSee('x-data="{ openAnnuler: false, openReactiver: false }"', false);
+        $response->assertSee('Annuler l\'échéance', false);
+        $response->assertSee('Motif (facultatif)', false);
+        $response->assertSee('Confirmer l\'annulation', false);
+        $response->assertDontSee('prompt(', false);
+        $response->assertDontSee('confirm(', false);
+    }
+
+    public function test_cancelling_a_pending_installment_without_a_reason_succeeds(): void
     {
         $student = User::factory()->create();
         $student->assignRole('student');
@@ -428,8 +458,10 @@ class AdminTest extends TestCase
 
         $response = $this->actingAs($this->getAdminUser())->patch(route('admin.echeances.annuler', $echeance), []);
 
-        $response->assertSessionHasErrors('motif');
-        $this->assertSame('pending', $echeance->fresh()->status);
+        $response->assertRedirect();
+        $echeance->refresh();
+        $this->assertSame('cancelled', $echeance->status);
+        $this->assertSame('['.now()->format('d/m/Y').'] Annulée', $echeance->notes);
     }
 
     public function test_cancelling_an_already_paid_installment_is_refused(): void
