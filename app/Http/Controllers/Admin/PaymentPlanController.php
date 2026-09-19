@@ -41,7 +41,10 @@ class PaymentPlanController extends Controller
             'total_amount'          => 'required|numeric|min:0',
             'advance_amount'        => 'required|numeric|min:0',
             'notes'                 => 'nullable|string|max:1000',
-            'echeances'             => 'required|array|min:1',
+            // Un plan peut n'avoir aucune echeance a venir a ressaisir : c'est
+            // justement le cas d'un dossier ramene a ce qui est deja regle
+            // (point 1 du 19/09/2026, coche a zero echeance restante).
+            'echeances'             => 'nullable|array',
             'echeances.*.amount'    => 'required|numeric|min:1',
             'echeances.*.due_date'  => 'required|date',
         ], [], [
@@ -50,11 +53,7 @@ class PaymentPlanController extends Controller
             'echeances'      => 'échéances',
         ]);
 
-        if ((float) $valide['advance_amount'] > (float) $valide['total_amount']) {
-            throw ValidationException::withMessages([
-                'advance_amount' => "L'avance ne peut pas dépasser le coût total.",
-            ]);
-        }
+        $echeancesSaisies = $valide['echeances'] ?? [];
 
         $planExistant = PaymentPlan::where('student_id', $student->id)->latest('id')->first();
 
@@ -66,7 +65,22 @@ class PaymentPlanController extends Controller
             ? (float) $planExistant->echeances()->where('status', 'paid')->sum('amount')
             : 0.0;
 
-        $sommeEcheances = collect($valide['echeances'])->sum(fn ($e) => (float) $e['amount']);
+        // Le cout total ne peut jamais descendre sous ce qui est deja
+        // encaisse (avance + echeances reglees) : ce serait afficher un
+        // solde negatif. Un remboursement trace releve d'un autre besoin
+        // (point 1 du 19/09/2026).
+        $montantDejaEncaisse = (float) $valide['advance_amount'] + $dejaRegle;
+
+        if ((float) $valide['total_amount'] < $montantDejaEncaisse) {
+            throw ValidationException::withMessages([
+                'total_amount' => sprintf(
+                    'Le coût total ne peut pas être inférieur au montant déjà réglé (%s).',
+                    number_format($montantDejaEncaisse, 0, ',', ' ')
+                ),
+            ]);
+        }
+
+        $sommeEcheances = collect($echeancesSaisies)->sum(fn ($e) => (float) $e['amount']);
         $attendu = (float) $valide['total_amount'] - (float) $valide['advance_amount'] - $dejaRegle;
 
         // Le plan doit se boucler : sinon les rappels annonceraient un solde
@@ -91,7 +105,7 @@ class PaymentPlanController extends Controller
         // exposerait a une saisie incoherente avec son affectation reelle.
         $programmeId = $this->programmeDeLApprenant($student)?->id;
 
-        DB::transaction(function () use ($student, $valide, $programmeId) {
+        DB::transaction(function () use ($student, $valide, $programmeId, $echeancesSaisies) {
             $plan = PaymentPlan::where('student_id', $student->id)->latest('id')->first();
 
             if ($plan) {
@@ -120,7 +134,7 @@ class PaymentPlanController extends Controller
                 ]);
             }
 
-            foreach ($valide['echeances'] as $e) {
+            foreach ($echeancesSaisies as $e) {
                 StudentPayment::create([
                     'student_id'      => $student->id,
                     'program_id'      => $programmeId,

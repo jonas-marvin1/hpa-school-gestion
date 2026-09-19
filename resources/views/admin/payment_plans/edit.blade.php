@@ -257,7 +257,10 @@
                                         <input type="number" step="1" min="1" :name="'echeances[' + i + '][amount]'" :id="'ech-montant-' + i" x-model.number="ligne.amount" required
                                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                                     </div>
-                                    <button type="button" @click="retirer(i)" x-show="lignes.length > 1"
+                                    {{-- Aucun minimum de lignes : un dossier ramene a ce qui est
+                                         deja regle n'a plus aucune echeance a venir (point 1 du
+                                         19/09/2026). --}}
+                                    <button type="button" @click="retirer(i)"
                                             class="px-3 py-2 text-sm text-red-600 hover:underline">Retirer</button>
                                 </div>
                             </template>

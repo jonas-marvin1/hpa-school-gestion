@@ -750,4 +750,135 @@ class AdminTest extends TestCase
         $this->assertEquals(100000, $adminSolde);
         $this->assertEquals($adminSolde, $studentSolde);
     }
+
+    public function test_lowering_total_amount_regenerates_upcoming_installments_without_touching_paid_or_cancelled(): void
+    {
+        $student = User::factory()->create();
+        $student->assignRole('student');
+        $admin = $this->getAdminUser();
+
+        $plan = \App\Models\PaymentPlan::create([
+            'student_id'     => $student->id,
+            'total_amount'   => 120000,
+            'advance_amount' => 0,
+        ]);
+
+        $reglee = \App\Models\StudentPayment::create([
+            'student_id'      => $student->id,
+            'payment_plan_id' => $plan->id,
+            'amount'          => 40000,
+            'due_date'        => now()->subDays(20),
+            'paid_date'       => now()->subDays(20),
+            'status'          => 'paid',
+        ]);
+
+        $annulee = \App\Models\StudentPayment::create([
+            'student_id'      => $student->id,
+            'payment_plan_id' => $plan->id,
+            'amount'          => 40000,
+            'due_date'        => now()->addDays(10),
+            'status'          => 'cancelled',
+            'notes'           => '[19/09/2026] Annulée',
+        ]);
+
+        $enAttente = \App\Models\StudentPayment::create([
+            'student_id'      => $student->id,
+            'payment_plan_id' => $plan->id,
+            'amount'          => 40000,
+            'due_date'        => now()->addDays(40),
+            'status'          => 'pending',
+        ]);
+
+        // Baisse du cout total : 100000 au lieu de 120000, donc 60000 a
+        // repartir sur les echeances a venir (100000 - 40000 deja regle).
+        $this->actingAs($admin)->post(route('admin.students.plan.store', $student), [
+            'total_amount'   => 100000,
+            'advance_amount' => 0,
+            'echeances'      => [
+                ['amount' => 60000, 'due_date' => now()->addDays(45)->format('Y-m-d')],
+            ],
+        ])->assertSessionHasNoErrors();
+
+        $reglee->refresh();
+        $annulee->refresh();
+        $this->assertSame('paid', $reglee->status);
+        $this->assertSame('cancelled', $annulee->status);
+        $this->assertDatabaseMissing('student_payments', ['id' => $enAttente->id]);
+
+        $plan->refresh();
+        $this->assertEquals(100000, $plan->total_amount);
+        $this->assertEquals(60000, (float) $plan->echeances()->where('status', 'pending')->sum('amount'));
+    }
+
+    public function test_total_amount_below_amount_already_paid_is_refused(): void
+    {
+        $student = User::factory()->create();
+        $student->assignRole('student');
+        $admin = $this->getAdminUser();
+
+        $plan = \App\Models\PaymentPlan::create([
+            'student_id'     => $student->id,
+            'total_amount'   => 120000,
+            'advance_amount' => 0,
+        ]);
+
+        \App\Models\StudentPayment::create([
+            'student_id'      => $student->id,
+            'payment_plan_id' => $plan->id,
+            'amount'          => 40000,
+            'due_date'        => now()->subDays(5),
+            'paid_date'       => now()->subDays(5),
+            'status'          => 'paid',
+        ]);
+
+        $response = $this->actingAs($admin)->post(route('admin.students.plan.store', $student), [
+            'total_amount'   => 30000,
+            'advance_amount' => 0,
+            'echeances'      => [],
+        ]);
+
+        $response->assertSessionHasErrors('total_amount');
+        $this->assertEquals(120000, $plan->fresh()->total_amount);
+    }
+
+    public function test_total_amount_equal_to_amount_paid_leaves_no_upcoming_installment_and_zero_balance(): void
+    {
+        $student = User::factory()->create();
+        $student->assignRole('student');
+        $admin = $this->getAdminUser();
+
+        $plan = \App\Models\PaymentPlan::create([
+            'student_id'     => $student->id,
+            'total_amount'   => 120000,
+            'advance_amount' => 0,
+        ]);
+
+        \App\Models\StudentPayment::create([
+            'student_id'      => $student->id,
+            'payment_plan_id' => $plan->id,
+            'amount'          => 40000,
+            'due_date'        => now()->subDays(5),
+            'paid_date'       => now()->subDays(5),
+            'status'          => 'paid',
+        ]);
+
+        \App\Models\StudentPayment::create([
+            'student_id'      => $student->id,
+            'payment_plan_id' => $plan->id,
+            'amount'          => 80000,
+            'due_date'        => now()->addDays(30),
+            'status'          => 'pending',
+        ]);
+
+        $this->actingAs($admin)->post(route('admin.students.plan.store', $student), [
+            'total_amount'   => 40000,
+            'advance_amount' => 0,
+            'echeances'      => [],
+        ])->assertSessionHasNoErrors();
+
+        $plan->refresh();
+        $this->assertEquals(40000, $plan->total_amount);
+        $this->assertEquals(0, $plan->echeances()->where('status', 'pending')->count());
+        $this->assertEquals(0, $plan->soldeRestant());
+    }
 }
