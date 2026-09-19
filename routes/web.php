@@ -74,6 +74,9 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->grou
     // l'annulation : l'echeance n'existait pas vraiment, elle disparait du
     // tableau et le cout total du plan diminue d'autant.
     Route::delete('/echeances/{echeance}', [\App\Http\Controllers\Admin\PaymentPlanController::class, 'supprimer'])->name('echeances.supprimer');
+    // Arret d'une formation abandonnee : solde le dossier en un geste
+    // (point 3 du 19/09/2026).
+    Route::patch('/plans/{plan}/arreter', [\App\Http\Controllers\Admin\PaymentPlanController::class, 'arreter'])->name('plans.arreter');
 
     // Vision previsionnelle des paiements attendus, tous apprenants
     // confondus, mois par mois (point 6).

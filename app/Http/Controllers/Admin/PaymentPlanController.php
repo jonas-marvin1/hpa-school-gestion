@@ -261,6 +261,51 @@ class PaymentPlanController extends Controller
     }
 
     /**
+     * Arrete une formation abandonnee : solde le dossier en un geste plutot
+     * que de laisser un administrateur annuler chaque echeance une a une
+     * (point 3 du 19/09/2026).
+     *
+     * On annule les echeances non reglees, on ne les supprime pas : c'est
+     * justement le cas ou l'on veut garder la trace de ce qui etait prevu,
+     * a la difference de « Supprimer » qui vise une erreur de saisie.
+     */
+    public function arreter(Request $request, PaymentPlan $plan)
+    {
+        $enCours = $plan->echeances()->where('status', 'pending')->get();
+
+        if ($enCours->isEmpty()) {
+            throw ValidationException::withMessages([
+                'plan' => 'Ce dossier est déjà soldé, il n\'y a rien à arrêter.',
+            ]);
+        }
+
+        $valide = $request->validate([
+            'motif' => 'nullable|string|max:255',
+        ], [], ['motif' => 'motif']);
+
+        DB::transaction(function () use ($plan, $enCours, $valide) {
+            $montantRegle = $plan->montantRegle();
+
+            foreach ($enCours as $echeance) {
+                $echeance->update(['status' => 'cancelled']);
+            }
+
+            $entree = filled($valide['motif'] ?? null)
+                ? sprintf('[%s] Formation arrêtée : %s', now()->format('d/m/Y'), $valide['motif'])
+                : sprintf('[%s] Formation arrêtée', now()->format('d/m/Y'));
+
+            // Le cout total est ramene a ce qui est deja regle : le dossier
+            // devient soldé et sort des relances (point 6 de la fiche).
+            $plan->update([
+                'total_amount' => $montantRegle,
+                'notes'        => trim(($plan->notes ? $plan->notes."\n" : '').$entree),
+            ]);
+        });
+
+        return back()->with('status', 'Formation arrêtée : le dossier est soldé.');
+    }
+
+    /**
      * Programme suivi par l'apprenant, deduit de sa classe.
      *
      * Un apprenant est affecte a une classe, elle-meme rattachee a un niveau

@@ -987,4 +987,152 @@ class AdminTest extends TestCase
         $response->assertForbidden();
         $this->assertDatabaseHas('student_payments', ['id' => $echeance->id]);
     }
+
+    public function test_stopping_a_program_cancels_unpaid_installments_and_settles_the_balance(): void
+    {
+        $student = User::factory()->create();
+        $student->assignRole('student');
+        $admin = $this->getAdminUser();
+
+        // Formule de 120000, payable 40000 par mois : le premier mois est
+        // regle, les deux suivants sont encore a venir.
+        $plan = \App\Models\PaymentPlan::create([
+            'student_id'     => $student->id,
+            'total_amount'   => 120000,
+            'advance_amount' => 0,
+        ]);
+
+        $reglee = \App\Models\StudentPayment::create([
+            'student_id'      => $student->id,
+            'payment_plan_id' => $plan->id,
+            'amount'          => 40000,
+            'due_date'        => now()->subDays(20),
+            'paid_date'       => now()->subDays(20),
+            'status'          => 'paid',
+        ]);
+
+        $aVenir1 = \App\Models\StudentPayment::create([
+            'student_id'      => $student->id,
+            'payment_plan_id' => $plan->id,
+            'amount'          => 40000,
+            'due_date'        => now()->addDays(10),
+            'status'          => 'pending',
+        ]);
+
+        $enRetard = \App\Models\StudentPayment::create([
+            'student_id'      => $student->id,
+            'payment_plan_id' => $plan->id,
+            'amount'          => 40000,
+            'due_date'        => now()->subDays(5),
+            'status'          => 'pending',
+        ]);
+
+        $response = $this->actingAs($admin)->patch(
+            route('admin.plans.arreter', $plan),
+            ['motif' => 'Abandon de la formation']
+        );
+
+        $response->assertRedirect();
+
+        $reglee->refresh();
+        $aVenir1->refresh();
+        $enRetard->refresh();
+        $this->assertSame('paid', $reglee->status);
+        $this->assertSame('cancelled', $aVenir1->status);
+        $this->assertSame('cancelled', $enRetard->status);
+        $this->assertDatabaseHas('student_payments', ['id' => $aVenir1->id]);
+        $this->assertDatabaseHas('student_payments', ['id' => $enRetard->id]);
+
+        $plan->refresh();
+        $this->assertEquals(40000, $plan->total_amount);
+        $this->assertEquals(0, $plan->soldeRestant());
+        $this->assertStringContainsString('Formation arrêtée', $plan->notes);
+        $this->assertStringContainsString('Abandon de la formation', $plan->notes);
+
+        $studentSolde = $this->actingAs($student)->get(route('student.dashboard'))
+            ->viewData('kpis')['solde_du'];
+        $this->assertEquals(0, $studentSolde);
+    }
+
+    public function test_stopping_an_already_settled_program_is_refused(): void
+    {
+        $student = User::factory()->create();
+        $student->assignRole('student');
+        $admin = $this->getAdminUser();
+
+        $plan = \App\Models\PaymentPlan::create([
+            'student_id'     => $student->id,
+            'total_amount'   => 40000,
+            'advance_amount' => 0,
+        ]);
+
+        \App\Models\StudentPayment::create([
+            'student_id'      => $student->id,
+            'payment_plan_id' => $plan->id,
+            'amount'          => 40000,
+            'due_date'        => now()->subDays(5),
+            'paid_date'       => now()->subDays(5),
+            'status'          => 'paid',
+        ]);
+
+        $response = $this->actingAs($admin)->patch(route('admin.plans.arreter', $plan));
+
+        $response->assertSessionHasErrors('plan');
+        $this->assertEquals(40000, $plan->fresh()->total_amount);
+    }
+
+    public function test_stopped_program_button_is_hidden_once_the_plan_is_settled(): void
+    {
+        $student = User::factory()->create();
+        $student->assignRole('student');
+        $admin = $this->getAdminUser();
+
+        $plan = \App\Models\PaymentPlan::create([
+            'student_id'     => $student->id,
+            'total_amount'   => 40000,
+            'advance_amount' => 0,
+        ]);
+
+        \App\Models\StudentPayment::create([
+            'student_id'      => $student->id,
+            'payment_plan_id' => $plan->id,
+            'amount'          => 40000,
+            'due_date'        => now()->subDays(5),
+            'paid_date'       => now()->subDays(5),
+            'status'          => 'paid',
+        ]);
+
+        $response = $this->actingAs($admin)->get(route('admin.students.plan.edit', $student));
+
+        $response->assertOk();
+        $response->assertDontSee('Arrêter la formation', false);
+    }
+
+    public function test_manager_cannot_stop_a_program(): void
+    {
+        $manager = User::factory()->create();
+        $manager->assignRole('manager');
+
+        $student = User::factory()->create();
+        $student->assignRole('student');
+
+        $plan = \App\Models\PaymentPlan::create([
+            'student_id'     => $student->id,
+            'total_amount'   => 120000,
+            'advance_amount' => 0,
+        ]);
+
+        \App\Models\StudentPayment::create([
+            'student_id'      => $student->id,
+            'payment_plan_id' => $plan->id,
+            'amount'          => 40000,
+            'due_date'        => now()->addDays(10),
+            'status'          => 'pending',
+        ]);
+
+        $response = $this->actingAs($manager)->patch(route('admin.plans.arreter', $plan));
+
+        $response->assertForbidden();
+        $this->assertEquals(120000, $plan->fresh()->total_amount);
+    }
 }

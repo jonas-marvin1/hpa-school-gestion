@@ -26,9 +26,70 @@
 
             {{-- Situation actuelle, uniquement si un plan existe deja --}}
             @if($plan)
-                <div class="bg-white shadow-sm sm:rounded-lg">
+                @php
+                    // Echeances non reglees et non annulees : ce que
+                    // l'arret de formation va annuler (point 3 du
+                    // 19/09/2026). Le bouton ne se propose que s'il en
+                    // reste au moins une.
+                    $echeancesAVenirArret = $plan->echeances->where('status', 'pending');
+                @endphp
+                <div class="bg-white shadow-sm sm:rounded-lg" x-data="{ openArreter: false }">
                     <div class="p-6">
-                        <h3 class="text-gray-500 text-sm font-semibold uppercase tracking-wide mb-5">Situation</h3>
+                        <div class="flex items-start justify-between gap-4 mb-5">
+                            <h3 class="text-gray-500 text-sm font-semibold uppercase tracking-wide">Situation</h3>
+                            @if($echeancesAVenirArret->isNotEmpty())
+                                <button type="button" @click="openArreter = true"
+                                        class="shrink-0 text-sm font-medium text-red-700 border border-red-300 rounded-md px-3 py-1.5 hover:bg-red-50">
+                                    Arrêter la formation
+                                </button>
+                            @endif
+                        </div>
+
+                        {{-- Fenetre de l'application, sur le meme modele que les
+                             confirmations d'annulation/suppression : annonce les
+                             montants reels du dossier avant d'agir. Rendue
+                             uniquement si le bouton l'est : un dossier deja
+                             solde n'a pas a en porter la trace dans le HTML. --}}
+                        @if($echeancesAVenirArret->isNotEmpty())
+                            <div x-show="openArreter" class="fixed inset-0 z-50 overflow-y-auto" style="display: none;" role="dialog" aria-modal="true">
+                                <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+                                    <div x-show="openArreter" x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="ease-in duration-200" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" @click="openArreter = false" aria-hidden="true"></div>
+
+                                    <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+
+                                    <div x-show="openArreter" x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95" x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100" x-transition:leave="ease-in duration-200" x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100" x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95" class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full whitespace-normal">
+                                        <form method="POST" action="{{ route('admin.plans.arreter', $plan) }}">
+                                            @csrf
+                                            @method('PATCH')
+                                            <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                                                <h3 class="text-lg leading-6 font-medium text-gray-900 mb-2">Arrêter la formation</h3>
+                                                <p class="text-sm text-gray-500 mb-4">
+                                                    L'apprenant a réglé {{ number_format($plan->montantRegle(), 0, ',', ' ') }} {{ $plan->currency }}.
+                                                    Arrêter la formation ramènera le coût total à
+                                                    {{ number_format($plan->montantRegle(), 0, ',', ' ') }} {{ $plan->currency }}
+                                                    et annulera les {{ $echeancesAVenirArret->count() }} échéance{{ $echeancesAVenirArret->count() > 1 ? 's' : '' }}
+                                                    à venir ({{ number_format($echeancesAVenirArret->sum('amount'), 0, ',', ' ') }} {{ $plan->currency }}).
+                                                    Le dossier apparaîtra soldé et sortira des relances.
+                                                </p>
+
+                                                <div class="mb-2">
+                                                    <label class="block text-sm font-medium text-gray-700 mb-1">Motif (facultatif)</label>
+                                                    <textarea name="motif" rows="3" maxlength="255" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"></textarea>
+                                                </div>
+                                            </div>
+                                            <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse gap-2">
+                                                <button type="submit" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 sm:w-auto sm:text-sm">
+                                                    Confirmer l'arrêt
+                                                </button>
+                                                <button type="button" @click="openArreter = false" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 sm:mt-0 sm:w-auto sm:text-sm">
+                                                    Fermer
+                                                </button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        @endif
 
                         <div class="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
                             <div>
