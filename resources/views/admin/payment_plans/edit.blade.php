@@ -177,6 +177,21 @@
                         </div>
                         <p class="text-right text-xs text-gray-500 mt-2">{{ $plan->progression() }}% de la formation réglée</p>
 
+                        {{-- Garde-fou de coherence (point 5 du 19/09/2026) : le cout
+                             total est saisi a la main, il peut diverger du detail.
+                             Ce n'est pas bloquant, seulement signale — un ecart
+                             silencieux ne se decouvre sinon qu'au moment ou un
+                             apprenant conteste. --}}
+                        @unless($plan->estCoherent())
+                            <div class="mt-4 rounded-md border border-amber-300 bg-amber-50 text-amber-800 px-4 py-3 text-sm">
+                                Le coût total ({{ number_format($plan->total_amount, 0, ',', ' ') }}) ne correspond pas
+                                au détail : {{ number_format($plan->montantRegle(), 0, ',', ' ') }} réglés +
+                                {{ number_format($plan->totalEcheancesAVenir(), 0, ',', ' ') }} à venir =
+                                {{ number_format($plan->montantRegle() + $plan->totalEcheancesAVenir(), 0, ',', ' ') }}.
+                                Vérifiez le plan.
+                            </div>
+                        @endunless
+
                         @if($plan->echeances->count())
                             <div class="mt-6 overflow-x-auto">
                                 <table class="w-full text-left border-collapse text-sm">

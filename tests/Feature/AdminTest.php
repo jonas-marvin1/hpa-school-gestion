@@ -1242,4 +1242,116 @@ class AdminTest extends TestCase
         $response->assertForbidden();
         $this->assertEquals(40000, $plan->fresh()->total_amount);
     }
+
+    public function test_inconsistency_warning_appears_when_total_does_not_match_the_detail(): void
+    {
+        $student = User::factory()->create();
+        $student->assignRole('student');
+        $admin = $this->getAdminUser();
+
+        // 120000 de cout total, mais seulement 40000 regles + 40000 a venir
+        // dans le detail : un ecart de 40000, geste commercial ou oubli.
+        $plan = \App\Models\PaymentPlan::create([
+            'student_id'     => $student->id,
+            'total_amount'   => 120000,
+            'advance_amount' => 0,
+        ]);
+
+        \App\Models\StudentPayment::create([
+            'student_id'      => $student->id,
+            'payment_plan_id' => $plan->id,
+            'amount'          => 40000,
+            'due_date'        => now()->subDays(5),
+            'paid_date'       => now()->subDays(5),
+            'status'          => 'paid',
+        ]);
+
+        \App\Models\StudentPayment::create([
+            'student_id'      => $student->id,
+            'payment_plan_id' => $plan->id,
+            'amount'          => 40000,
+            'due_date'        => now()->addDays(20),
+            'status'          => 'pending',
+        ]);
+
+        $this->assertFalse($plan->estCoherent());
+
+        $response = $this->actingAs($admin)->get(route('admin.students.plan.edit', $student));
+
+        $response->assertOk();
+        $response->assertSee('ne correspond pas', false);
+        $response->assertSee('Vérifiez le plan', false);
+    }
+
+    public function test_no_inconsistency_warning_when_total_matches_the_detail(): void
+    {
+        $student = User::factory()->create();
+        $student->assignRole('student');
+        $admin = $this->getAdminUser();
+
+        $plan = \App\Models\PaymentPlan::create([
+            'student_id'     => $student->id,
+            'total_amount'   => 80000,
+            'advance_amount' => 0,
+        ]);
+
+        \App\Models\StudentPayment::create([
+            'student_id'      => $student->id,
+            'payment_plan_id' => $plan->id,
+            'amount'          => 40000,
+            'due_date'        => now()->subDays(5),
+            'paid_date'       => now()->subDays(5),
+            'status'          => 'paid',
+        ]);
+
+        \App\Models\StudentPayment::create([
+            'student_id'      => $student->id,
+            'payment_plan_id' => $plan->id,
+            'amount'          => 40000,
+            'due_date'        => now()->addDays(20),
+            'status'          => 'pending',
+        ]);
+
+        $this->assertTrue($plan->estCoherent());
+
+        $response = $this->actingAs($admin)->get(route('admin.students.plan.edit', $student));
+
+        $response->assertOk();
+        $response->assertDontSee('ne correspond pas', false);
+    }
+
+    public function test_inconsistency_warning_ignores_cancelled_installments(): void
+    {
+        $student = User::factory()->create();
+        $student->assignRole('student');
+        $admin = $this->getAdminUser();
+
+        // Le cout total (40000) colle a « deja regle + a venir », une
+        // echeance annulee de 40000 en plus ne doit pas fausser le calcul :
+        // elle est hors du detail attendu, pas un ecart a signaler.
+        $plan = \App\Models\PaymentPlan::create([
+            'student_id'     => $student->id,
+            'total_amount'   => 40000,
+            'advance_amount' => 0,
+        ]);
+
+        \App\Models\StudentPayment::create([
+            'student_id'      => $student->id,
+            'payment_plan_id' => $plan->id,
+            'amount'          => 40000,
+            'due_date'        => now()->subDays(5),
+            'paid_date'       => now()->subDays(5),
+            'status'          => 'paid',
+        ]);
+
+        \App\Models\StudentPayment::create([
+            'student_id'      => $student->id,
+            'payment_plan_id' => $plan->id,
+            'amount'          => 40000,
+            'due_date'        => now()->addDays(10),
+            'status'          => 'cancelled',
+        ]);
+
+        $this->assertTrue($plan->estCoherent());
+    }
 }
