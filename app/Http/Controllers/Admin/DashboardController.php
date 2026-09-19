@@ -28,14 +28,18 @@ class DashboardController extends Controller
         // Echeances des apprenants a relancer : celles qui tombent aujourd'hui
         // et celles deja depassees. C'est ce que l'administrateur doit voir en
         // arrivant, pour savoir qui rappeler dans la journee.
+        // Exclut aussi les echeances annulees (formation arretee ou echeance
+        // individuellement annulee, point 6 du 19/09/2026) : elles ne sont
+        // plus dues, les compter aurait relance un dossier deja regle avec
+        // l'administrateur.
         $echeancesDuJour = \App\Models\StudentPayment::with(['student', 'paymentPlan'])
-            ->where('status', '!=', 'paid')
+            ->whereNotIn('status', ['paid', 'cancelled'])
             ->whereDate('due_date', today())
             ->orderBy('due_date')
             ->get();
 
         $echeancesEnRetard = \App\Models\StudentPayment::with(['student', 'paymentPlan'])
-            ->where('status', '!=', 'paid')
+            ->whereNotIn('status', ['paid', 'cancelled'])
             ->whereDate('due_date', '<', today())
             ->orderBy('due_date')   // la plus ancienne d'abord : la plus urgente
             ->get();

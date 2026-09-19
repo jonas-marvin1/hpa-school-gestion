@@ -41,7 +41,10 @@ class PaymentPlanController extends Controller
             'total_amount'          => 'required|numeric|min:0',
             'advance_amount'        => 'required|numeric|min:0',
             'notes'                 => 'nullable|string|max:1000',
-            'echeances'             => 'required|array|min:1',
+            // Un plan peut n'avoir aucune echeance a venir a ressaisir : c'est
+            // justement le cas d'un dossier ramene a ce qui est deja regle
+            // (point 1 du 19/09/2026, coche a zero echeance restante).
+            'echeances'             => 'nullable|array',
             'echeances.*.amount'    => 'required|numeric|min:1',
             'echeances.*.due_date'  => 'required|date',
         ], [], [
@@ -50,11 +53,7 @@ class PaymentPlanController extends Controller
             'echeances'      => 'échéances',
         ]);
 
-        if ((float) $valide['advance_amount'] > (float) $valide['total_amount']) {
-            throw ValidationException::withMessages([
-                'advance_amount' => "L'avance ne peut pas dépasser le coût total.",
-            ]);
-        }
+        $echeancesSaisies = $valide['echeances'] ?? [];
 
         $planExistant = PaymentPlan::where('student_id', $student->id)->latest('id')->first();
 
@@ -66,7 +65,22 @@ class PaymentPlanController extends Controller
             ? (float) $planExistant->echeances()->where('status', 'paid')->sum('amount')
             : 0.0;
 
-        $sommeEcheances = collect($valide['echeances'])->sum(fn ($e) => (float) $e['amount']);
+        // Le cout total ne peut jamais descendre sous ce qui est deja
+        // encaisse (avance + echeances reglees) : ce serait afficher un
+        // solde negatif. Un remboursement trace releve d'un autre besoin
+        // (point 1 du 19/09/2026).
+        $montantDejaEncaisse = (float) $valide['advance_amount'] + $dejaRegle;
+
+        if ((float) $valide['total_amount'] < $montantDejaEncaisse) {
+            throw ValidationException::withMessages([
+                'total_amount' => sprintf(
+                    'Le coût total ne peut pas être inférieur au montant déjà réglé (%s).',
+                    number_format($montantDejaEncaisse, 0, ',', ' ')
+                ),
+            ]);
+        }
+
+        $sommeEcheances = collect($echeancesSaisies)->sum(fn ($e) => (float) $e['amount']);
         $attendu = (float) $valide['total_amount'] - (float) $valide['advance_amount'] - $dejaRegle;
 
         // Le plan doit se boucler : sinon les rappels annonceraient un solde
@@ -91,7 +105,7 @@ class PaymentPlanController extends Controller
         // exposerait a une saisie incoherente avec son affectation reelle.
         $programmeId = $this->programmeDeLApprenant($student)?->id;
 
-        DB::transaction(function () use ($student, $valide, $programmeId) {
+        DB::transaction(function () use ($student, $valide, $programmeId, $echeancesSaisies) {
             $plan = PaymentPlan::where('student_id', $student->id)->latest('id')->first();
 
             if ($plan) {
@@ -120,7 +134,7 @@ class PaymentPlanController extends Controller
                 ]);
             }
 
-            foreach ($valide['echeances'] as $e) {
+            foreach ($echeancesSaisies as $e) {
                 StudentPayment::create([
                     'student_id'      => $student->id,
                     'program_id'      => $programmeId,
@@ -198,6 +212,130 @@ class PaymentPlanController extends Controller
         $echeance->update(['status' => 'pending']);
 
         return back()->with('status', 'Échéance réactivée.');
+    }
+
+    /**
+     * Supprime definitivement une echeance a venir : contrairement a
+     * l'annulation, la ligne n'existait pas vraiment (erreur de saisie), le
+     * cout total du plan diminue donc du meme montant (point 2 du
+     * 19/09/2026).
+     *
+     * Une echeance deja reglee ne se supprime jamais : le montant encaisse
+     * est un fait, pas une prevision qu'on peut effacer. Une echeance
+     * annulee non plus : elle porte deja sa propre trace dans les notes,
+     * la supprimer perdrait cette memoire pour rien, alors que le geste
+     * « Supprimer » vise justement les echeances a venir saisies par erreur.
+     */
+    public function supprimer(StudentPayment $echeance)
+    {
+        if ($echeance->status !== 'pending') {
+            throw ValidationException::withMessages([
+                'echeance' => 'Seule une échéance à venir peut être supprimée.',
+            ]);
+        }
+
+        $plan = $echeance->paymentPlan;
+
+        DB::transaction(function () use ($echeance, $plan) {
+            if ($plan) {
+                // On perd la ligne, pas la memoire de son existence : la
+                // suppression s'ajoute aux notes du plan avant que
+                // l'echeance elle-meme ne disparaisse du tableau.
+                $entree = sprintf(
+                    '[%s] Échéance du %s supprimée (%s)',
+                    now()->format('d/m/Y'),
+                    $echeance->due_date->format('d/m/Y'),
+                    number_format($echeance->amount, 0, ',', ' ').' '.$plan->currency
+                );
+
+                $plan->update([
+                    'total_amount' => max(0, (float) $plan->total_amount - (float) $echeance->amount),
+                    'notes'        => trim(($plan->notes ? $plan->notes."\n" : '').$entree),
+                ]);
+            }
+
+            $echeance->delete();
+        });
+
+        return back()->with('status', 'Échéance supprimée.');
+    }
+
+    /**
+     * Arrete une formation abandonnee : solde le dossier en un geste plutot
+     * que de laisser un administrateur annuler chaque echeance une a une
+     * (point 3 du 19/09/2026).
+     *
+     * On annule les echeances non reglees, on ne les supprime pas : c'est
+     * justement le cas ou l'on veut garder la trace de ce qui etait prevu,
+     * a la difference de « Supprimer » qui vise une erreur de saisie.
+     */
+    public function arreter(Request $request, PaymentPlan $plan)
+    {
+        $enCours = $plan->echeances()->where('status', 'pending')->get();
+
+        if ($enCours->isEmpty()) {
+            throw ValidationException::withMessages([
+                'plan' => 'Ce dossier est déjà soldé, il n\'y a rien à arrêter.',
+            ]);
+        }
+
+        $valide = $request->validate([
+            'motif' => 'nullable|string|max:255',
+        ], [], ['motif' => 'motif']);
+
+        DB::transaction(function () use ($plan, $enCours, $valide) {
+            $montantRegle = $plan->montantRegle();
+
+            foreach ($enCours as $echeance) {
+                $echeance->update(['status' => 'cancelled']);
+            }
+
+            $entree = filled($valide['motif'] ?? null)
+                ? sprintf('[%s] Formation arrêtée : %s', now()->format('d/m/Y'), $valide['motif'])
+                : sprintf('[%s] Formation arrêtée', now()->format('d/m/Y'));
+
+            // Le cout total est ramene a ce qui est deja regle : le dossier
+            // devient soldé et sort des relances (point 6 de la fiche).
+            $plan->update([
+                'total_amount' => $montantRegle,
+                'notes'        => trim(($plan->notes ? $plan->notes."\n" : '').$entree),
+            ]);
+        });
+
+        return back()->with('status', 'Formation arrêtée : le dossier est soldé.');
+    }
+
+    /**
+     * Ajoute une echeance a un plan existant : c'est le mecanisme de
+     * reprise d'un apprenant qui revient apres un arret, ou d'un ajustement
+     * de calendrier ponctuel (point 4 du 19/09/2026). Un seul plan de
+     * paiement par apprenant, jamais de second plan a creer.
+     */
+    public function ajouterEcheance(Request $request, PaymentPlan $plan)
+    {
+        $valide = $request->validate([
+            'amount'   => 'required|numeric|min:1',
+            'due_date' => 'required|date|after:today',
+        ], [], ['amount' => 'montant', 'due_date' => 'date']);
+
+        DB::transaction(function () use ($plan, $valide) {
+            StudentPayment::create([
+                'student_id'      => $plan->student_id,
+                'program_id'      => $plan->program_id,
+                'payment_plan_id' => $plan->id,
+                'amount'          => $valide['amount'],
+                'due_date'        => $valide['due_date'],
+                'status'          => 'pending',
+            ]);
+
+            // Le cout total remonte du meme montant : la nouvelle echeance
+            // s'ajoute a ce qui etait deja du, elle ne le remplace pas.
+            $plan->update([
+                'total_amount' => (float) $plan->total_amount + (float) $valide['amount'],
+            ]);
+        });
+
+        return back()->with('status', 'Échéance ajoutée.');
     }
 
     /**

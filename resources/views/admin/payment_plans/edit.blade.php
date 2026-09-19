@@ -26,9 +26,123 @@
 
             {{-- Situation actuelle, uniquement si un plan existe deja --}}
             @if($plan)
-                <div class="bg-white shadow-sm sm:rounded-lg">
+                @php
+                    // Echeances non reglees et non annulees : ce que
+                    // l'arret de formation va annuler (point 3 du
+                    // 19/09/2026). Le bouton ne se propose que s'il en
+                    // reste au moins une.
+                    $echeancesAVenirArret = $plan->echeances->where('status', 'pending');
+                @endphp
+                <div class="bg-white shadow-sm sm:rounded-lg" x-data="{ openArreter: false, openAjouter: false }">
                     <div class="p-6">
-                        <h3 class="text-gray-500 text-sm font-semibold uppercase tracking-wide mb-5">Situation</h3>
+                        <div class="flex items-start justify-between gap-4 mb-5">
+                            <h3 class="text-gray-500 text-sm font-semibold uppercase tracking-wide">Situation</h3>
+                            <div class="flex items-center gap-2">
+                                {{-- Reprise d'une formation interrompue, ou simple
+                                     ajustement de calendrier (point 4 du 19/09/2026) :
+                                     toujours proposee, meme sur un dossier solde. --}}
+                                <button type="button" @click="openAjouter = true"
+                                        class="shrink-0 text-sm font-medium text-indigo-700 border border-indigo-300 rounded-md px-3 py-1.5 hover:bg-indigo-50">
+                                    + Ajouter une échéance
+                                </button>
+                                @if($echeancesAVenirArret->isNotEmpty())
+                                    <button type="button" @click="openArreter = true"
+                                            class="shrink-0 text-sm font-medium text-red-700 border border-red-300 rounded-md px-3 py-1.5 hover:bg-red-50">
+                                        Arrêter la formation
+                                    </button>
+                                @endif
+                            </div>
+                        </div>
+
+                        {{-- Fenetre d'ajout d'une echeance : une date et un montant,
+                             aucune confirmation de type « rappel de montants » n'est
+                             necessaire, il ne s'agit pas d'un geste destructif. --}}
+                        <div x-show="openAjouter" class="fixed inset-0 z-50 overflow-y-auto" style="display: none;" role="dialog" aria-modal="true">
+                            <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+                                <div x-show="openAjouter" x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="ease-in duration-200" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" @click="openAjouter = false" aria-hidden="true"></div>
+
+                                <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+
+                                <div x-show="openAjouter" x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95" x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100" x-transition:leave="ease-in duration-200" x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100" x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95" class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full whitespace-normal">
+                                    <form method="POST" action="{{ route('admin.plans.echeances.store', $plan) }}">
+                                        @csrf
+                                        <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                                            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-2">Ajouter une échéance</h3>
+                                            <p class="text-sm text-gray-500 mb-4">
+                                                Le coût total du plan augmentera du montant saisi. C'est le geste à
+                                                utiliser pour reprendre un dossier arrêté : l'apprenant garde le
+                                                même plan, son historique et ses échéances annulées.
+                                            </p>
+
+                                            <div class="mb-4">
+                                                <label class="block text-sm font-medium text-gray-700 mb-1">Date d'échéance</label>
+                                                <input type="date" name="due_date" min="{{ now()->addDay()->format('Y-m-d') }}" required
+                                                       class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                            </div>
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700 mb-1">Montant</label>
+                                                <input type="number" name="amount" step="1" min="1" required
+                                                       class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                            </div>
+                                        </div>
+                                        <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse gap-2">
+                                            <button type="submit" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-indigo-600 text-base font-medium text-white hover:bg-indigo-700 sm:w-auto sm:text-sm">
+                                                Ajouter
+                                            </button>
+                                            <button type="button" @click="openAjouter = false" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 sm:mt-0 sm:w-auto sm:text-sm">
+                                                Fermer
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+
+                        {{-- Fenetre de l'application, sur le meme modele que les
+                             confirmations d'annulation/suppression : annonce les
+                             montants reels du dossier avant d'agir. Rendue
+                             uniquement si le bouton l'est : un dossier deja
+                             solde n'a pas a en porter la trace dans le HTML. --}}
+                        @if($echeancesAVenirArret->isNotEmpty())
+                            <div x-show="openArreter" class="fixed inset-0 z-50 overflow-y-auto" style="display: none;" role="dialog" aria-modal="true">
+                                <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+                                    <div x-show="openArreter" x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="ease-in duration-200" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" @click="openArreter = false" aria-hidden="true"></div>
+
+                                    <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+
+                                    <div x-show="openArreter" x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95" x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100" x-transition:leave="ease-in duration-200" x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100" x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95" class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full whitespace-normal">
+                                        <form method="POST" action="{{ route('admin.plans.arreter', $plan) }}">
+                                            @csrf
+                                            @method('PATCH')
+                                            <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                                                <h3 class="text-lg leading-6 font-medium text-gray-900 mb-2">Arrêter la formation</h3>
+                                                <p class="text-sm text-gray-500 mb-4">
+                                                    L'apprenant a réglé {{ number_format($plan->montantRegle(), 0, ',', ' ') }} {{ $plan->currency }}.
+                                                    Arrêter la formation ramènera le coût total à
+                                                    {{ number_format($plan->montantRegle(), 0, ',', ' ') }} {{ $plan->currency }}
+                                                    et annulera les {{ $echeancesAVenirArret->count() }} échéance{{ $echeancesAVenirArret->count() > 1 ? 's' : '' }}
+                                                    à venir ({{ number_format($echeancesAVenirArret->sum('amount'), 0, ',', ' ') }} {{ $plan->currency }}).
+                                                    Le dossier apparaîtra soldé et sortira des relances.
+                                                </p>
+
+                                                <div class="mb-2">
+                                                    <label class="block text-sm font-medium text-gray-700 mb-1">Motif (facultatif)</label>
+                                                    <textarea name="motif" rows="3" maxlength="255" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"></textarea>
+                                                </div>
+                                            </div>
+                                            <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse gap-2">
+                                                <button type="submit" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 sm:w-auto sm:text-sm">
+                                                    Confirmer l'arrêt
+                                                </button>
+                                                <button type="button" @click="openArreter = false" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 sm:mt-0 sm:w-auto sm:text-sm">
+                                                    Fermer
+                                                </button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        @endif
 
                         <div class="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
                             <div>
@@ -63,6 +177,21 @@
                         </div>
                         <p class="text-right text-xs text-gray-500 mt-2">{{ $plan->progression() }}% de la formation réglée</p>
 
+                        {{-- Garde-fou de coherence (point 5 du 19/09/2026) : le cout
+                             total est saisi a la main, il peut diverger du detail.
+                             Ce n'est pas bloquant, seulement signale — un ecart
+                             silencieux ne se decouvre sinon qu'au moment ou un
+                             apprenant conteste. --}}
+                        @unless($plan->estCoherent())
+                            <div class="mt-4 rounded-md border border-amber-300 bg-amber-50 text-amber-800 px-4 py-3 text-sm">
+                                Le coût total ({{ number_format($plan->total_amount, 0, ',', ' ') }}) ne correspond pas
+                                au détail : {{ number_format($plan->montantRegle(), 0, ',', ' ') }} réglés +
+                                {{ number_format($plan->totalEcheancesAVenir(), 0, ',', ' ') }} à venir =
+                                {{ number_format($plan->montantRegle() + $plan->totalEcheancesAVenir(), 0, ',', ' ') }}.
+                                Vérifiez le plan.
+                            </div>
+                        @endunless
+
                         @if($plan->echeances->count())
                             <div class="mt-6 overflow-x-auto">
                                 <table class="w-full text-left border-collapse text-sm">
@@ -76,7 +205,7 @@
                                     </thead>
                                     <tbody>
                                         @foreach($plan->echeances as $e)
-                                            <tr x-data="{ openAnnuler: false, openReactiver: false }">
+                                            <tr x-data="{ openAnnuler: false, openReactiver: false, openSupprimer: false }">
                                                 <td class="border-b py-2 px-3">{{ $e->due_date->format('d/m/Y') }}</td>
                                                 <td class="border-b py-2 px-3 text-right font-medium">{{ number_format($e->amount, 0, ',', ' ') }}</td>
                                                 <td class="border-b py-2 px-3 text-center">
@@ -104,6 +233,10 @@
                                                                 <button type="submit" class="text-indigo-600 hover:underline">Marquer réglée</button>
                                                             </form>
                                                             <button type="button" @click="openAnnuler = true" class="text-red-600 hover:underline">Annuler</button>
+                                                            {{-- Distinct de l'annulation : ceci efface la ligne et
+                                                                 diminue le cout total, reserve a une erreur de saisie
+                                                                 (point 2 du 19/09/2026). --}}
+                                                            <button type="button" @click="openSupprimer = true" class="text-gray-500 hover:underline">Supprimer</button>
 
                                                             {{-- Fenetre de l'application, sur le modele de
                                                                  x-prolonger-delai-modal : ni prompt() ni confirm(),
@@ -134,6 +267,43 @@
                                                                                     Confirmer l'annulation
                                                                                 </button>
                                                                                 <button type="button" @click="openAnnuler = false" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 sm:mt-0 sm:w-auto sm:text-sm">
+                                                                                    Fermer
+                                                                                </button>
+                                                                            </div>
+                                                                        </form>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            {{-- Confirmation rappelant date et montant, sur le meme
+                                                                 modele que la fenetre d'annulation du 14/09/2026. --}}
+                                                            <div x-show="openSupprimer" class="fixed inset-0 z-50 overflow-y-auto" style="display: none;" role="dialog" aria-modal="true">
+                                                                <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+                                                                    <div x-show="openSupprimer" x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="ease-in duration-200" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" @click="openSupprimer = false" aria-hidden="true"></div>
+
+                                                                    <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+
+                                                                    <div x-show="openSupprimer" x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95" x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100" x-transition:leave="ease-in duration-200" x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100" x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95" class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full whitespace-normal">
+                                                                        <form method="POST" action="{{ route('admin.echeances.supprimer', $e) }}">
+                                                                            @csrf
+                                                                            @method('DELETE')
+                                                                            <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                                                                                <h3 class="text-lg leading-6 font-medium text-gray-900 mb-2">Supprimer l'échéance</h3>
+                                                                                <p class="text-sm text-gray-500 mb-2">
+                                                                                    {{ $e->due_date->format('d/m/Y') }} — {{ number_format($e->amount, 0, ',', ' ') }} {{ $plan->currency }}
+                                                                                </p>
+                                                                                <p class="text-sm text-gray-500">
+                                                                                    Cette échéance disparaîtra du tableau et le coût total du plan
+                                                                                    diminuera de {{ number_format($e->amount, 0, ',', ' ') }} {{ $plan->currency }}.
+                                                                                    À réserver à une erreur de saisie : si la formation est abandonnée,
+                                                                                    utilisez plutôt « Arrêter la formation ».
+                                                                                </p>
+                                                                            </div>
+                                                                            <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse gap-2">
+                                                                                <button type="submit" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-gray-700 text-base font-medium text-white hover:bg-gray-800 sm:w-auto sm:text-sm">
+                                                                                    Confirmer la suppression
+                                                                                </button>
+                                                                                <button type="button" @click="openSupprimer = false" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 sm:mt-0 sm:w-auto sm:text-sm">
                                                                                     Fermer
                                                                                 </button>
                                                                             </div>
@@ -195,8 +365,14 @@
                         total: {{ old('total_amount', $plan->total_amount ?? 0) }},
                         avance: {{ old('advance_amount', $plan->advance_amount ?? 0) }},
                         dejaRegle: {{ $plan ? (float) $plan->echeances->where('status', 'paid')->sum('amount') : 0 }},
+                        {{-- Seules les echeances en attente sont preremplies ici : une
+                             echeance annulee (annulation simple ou arret de formation,
+                             point 3 du 19/09/2026) a son propre geste de reprise
+                             (« Ajouter une echeance »). La preremplir ici faussait le
+                             « reste a repartir » et affichait un ecart fantome des la
+                             reouverture de l'ecran apres un arret. --}}
                         lignes: {{ json_encode(old('echeances', $plan
-                            ? $plan->echeances->where('status', '!=', 'paid')->map(fn($e) => ['amount' => (float) $e->amount, 'due_date' => $e->due_date->format('Y-m-d')])->values()
+                            ? $plan->echeances->where('status', 'pending')->map(fn($e) => ['amount' => (float) $e->amount, 'due_date' => $e->due_date->format('Y-m-d')])->values()
                             : [['amount' => '', 'due_date' => '']])) }}
                      })">
 
@@ -257,7 +433,10 @@
                                         <input type="number" step="1" min="1" :name="'echeances[' + i + '][amount]'" :id="'ech-montant-' + i" x-model.number="ligne.amount" required
                                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                                     </div>
-                                    <button type="button" @click="retirer(i)" x-show="lignes.length > 1"
+                                    {{-- Aucun minimum de lignes : un dossier ramene a ce qui est
+                                         deja regle n'a plus aucune echeance a venir (point 1 du
+                                         19/09/2026). --}}
+                                    <button type="button" @click="retirer(i)"
                                             class="px-3 py-2 text-sm text-red-600 hover:underline">Retirer</button>
                                 </div>
                             </template>

@@ -45,8 +45,11 @@ class AlertesEcheances extends Component
     {
         $alertes = [];
 
+        // Une echeance annulee (annulation individuelle ou formation
+        // arretee, point 6 du 19/09/2026) n'est plus due : elle ne doit
+        // declencher aucune alerte, au meme titre qu'une echeance reglee.
         $paiements = StudentPayment::where('student_id', $student->id)
-            ->where('status', '!=', 'paid')
+            ->whereNotIn('status', ['paid', 'cancelled'])
             ->where('due_date', '<=', now()->addDays(self::PREAVIS_PAIEMENT_JOURS))
             ->orderBy('due_date')
             ->get();

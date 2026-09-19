@@ -77,18 +77,34 @@ class PaymentPlan extends Model
             ->first();
     }
 
-    /** Somme des echeances saisies, pour verifier la coherence du plan. */
-    public function totalEcheances(): float
+    /**
+     * Somme des echeances a venir, hors annulees : ce que le plan promet
+     * encore de percevoir, en plus de ce qui est deja regle.
+     */
+    public function totalEcheancesAVenir(): float
     {
-        return (float) $this->echeances()->sum('amount');
+        return (float) $this->echeances()->where('status', 'pending')->sum('amount');
     }
 
     /**
-     * Le plan est coherent si avance + echeances couvrent exactement le total.
-     * La tolerance d'une unite absorbe les arrondis de saisie.
+     * Le plan est coherent si le cout total colle a son detail : montant
+     * deja regle plus echeances a venir (hors annulees). Comme le cout
+     * total est saisi a la main, il peut diverger de ce detail — parfois
+     * legitimement (geste commercial, remise partielle) — d'ou une
+     * tolerance d'une unite pour absorber les seuls arrondis de saisie
+     * (point 5 du 19/09/2026, garde-fou non bloquant).
      */
     public function estCoherent(): bool
     {
-        return abs(((float) $this->advance_amount + $this->totalEcheances()) - (float) $this->total_amount) < 1;
+        return abs($this->ecartCoherence()) < 1;
+    }
+
+    /**
+     * Ecart entre le cout total affiche et son detail (positif si le total
+     * annonce plus que ce que le detail justifie, negatif sinon).
+     */
+    public function ecartCoherence(): float
+    {
+        return (float) $this->total_amount - ($this->montantRegle() + $this->totalEcheancesAVenir());
     }
 }

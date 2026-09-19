@@ -186,4 +186,25 @@ class StudentTest extends TestCase
         $kpis = $response->viewData('kpis');
         $this->assertEquals(30000, $kpis['solde_du']);
     }
+
+    public function test_cancelled_installment_does_not_trigger_a_payment_alert(): void
+    {
+        // Une echeance annulee (annulation individuelle ou formation
+        // arretee, point 6 du 19/09/2026) n'est plus due : elle ne doit
+        // pas declencher l'alerte de paiement proche/en retard.
+        $student = $this->getStudentUser();
+
+        \App\Models\StudentPayment::create([
+            'student_id' => $student->id,
+            'amount'     => 40000,
+            'due_date'   => now()->subDays(2),
+            'status'     => 'cancelled',
+        ]);
+
+        $response = $this->actingAs($student)->get(route('student.dashboard'));
+
+        $response->assertStatus(200);
+        $response->assertDontSee('Paiement en retard');
+        $response->assertDontSee('Échéance de paiement proche');
+    }
 }
