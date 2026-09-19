@@ -1355,6 +1355,46 @@ class AdminTest extends TestCase
         $this->assertTrue($plan->estCoherent());
     }
 
+    public function test_reopening_the_plan_form_after_stopping_does_not_prefill_cancelled_installments(): void
+    {
+        // Bug decouvert en verification navigateur (point 3 du 19/09/2026) :
+        // le formulaire « Modifier le plan » preremplissait aussi les
+        // echeances annulees, faisant apparaitre un faux ecart des la
+        // reouverture de l'ecran juste apres un arret de formation, alors
+        // que le plan est en realite deja equilibre (reste a repartir = 0).
+        $student = User::factory()->create();
+        $student->assignRole('student');
+        $admin = $this->getAdminUser();
+
+        $plan = \App\Models\PaymentPlan::create([
+            'student_id'     => $student->id,
+            'total_amount'   => 40000,
+            'advance_amount' => 0,
+        ]);
+
+        \App\Models\StudentPayment::create([
+            'student_id'      => $student->id,
+            'payment_plan_id' => $plan->id,
+            'amount'          => 40000,
+            'due_date'        => now()->subDays(5),
+            'paid_date'       => now()->subDays(5),
+            'status'          => 'paid',
+        ]);
+
+        \App\Models\StudentPayment::create([
+            'student_id'      => $student->id,
+            'payment_plan_id' => $plan->id,
+            'amount'          => 40000,
+            'due_date'        => now()->addDays(10),
+            'status'          => 'cancelled',
+        ]);
+
+        $response = $this->actingAs($admin)->get(route('admin.students.plan.edit', $student));
+
+        $response->assertOk();
+        $response->assertSee('lignes: []', false);
+    }
+
     public function test_admin_dashboard_excludes_cancelled_installments_from_reminders(): void
     {
         $student = User::factory()->create();

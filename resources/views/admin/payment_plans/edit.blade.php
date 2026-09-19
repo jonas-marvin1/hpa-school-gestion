@@ -365,8 +365,14 @@
                         total: {{ old('total_amount', $plan->total_amount ?? 0) }},
                         avance: {{ old('advance_amount', $plan->advance_amount ?? 0) }},
                         dejaRegle: {{ $plan ? (float) $plan->echeances->where('status', 'paid')->sum('amount') : 0 }},
+                        {{-- Seules les echeances en attente sont preremplies ici : une
+                             echeance annulee (annulation simple ou arret de formation,
+                             point 3 du 19/09/2026) a son propre geste de reprise
+                             (« Ajouter une echeance »). La preremplir ici faussait le
+                             « reste a repartir » et affichait un ecart fantome des la
+                             reouverture de l'ecran apres un arret. --}}
                         lignes: {{ json_encode(old('echeances', $plan
-                            ? $plan->echeances->where('status', '!=', 'paid')->map(fn($e) => ['amount' => (float) $e->amount, 'due_date' => $e->due_date->format('Y-m-d')])->values()
+                            ? $plan->echeances->where('status', 'pending')->map(fn($e) => ['amount' => (float) $e->amount, 'due_date' => $e->due_date->format('Y-m-d')])->values()
                             : [['amount' => '', 'due_date' => '']])) }}
                      })">
 
