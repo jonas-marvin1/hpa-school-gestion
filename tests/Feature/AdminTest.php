@@ -1354,4 +1354,46 @@ class AdminTest extends TestCase
 
         $this->assertTrue($plan->estCoherent());
     }
+
+    public function test_admin_dashboard_excludes_cancelled_installments_from_reminders(): void
+    {
+        $student = User::factory()->create();
+        $student->assignRole('student');
+        $admin = $this->getAdminUser();
+
+        // Dossier arrete : ces echeances etaient en retard/du jour avant
+        // l'arret, elles ne doivent plus figurer dans les relances
+        // (point 6 du 19/09/2026).
+        \App\Models\StudentPayment::create([
+            'student_id' => $student->id,
+            'amount'     => 40000,
+            'due_date'   => now(),
+            'status'     => 'cancelled',
+        ]);
+
+        \App\Models\StudentPayment::create([
+            'student_id' => $student->id,
+            'amount'     => 40000,
+            'due_date'   => now()->subDays(3),
+            'status'     => 'cancelled',
+        ]);
+
+        // Une echeance encore active, elle, doit continuer d'apparaitre.
+        $active = \App\Models\StudentPayment::create([
+            'student_id' => $student->id,
+            'amount'     => 25000,
+            'due_date'   => now(),
+            'status'     => 'pending',
+        ]);
+
+        $response = $this->actingAs($admin)->get(route('admin.dashboard'));
+
+        $response->assertOk();
+        $echeancesDuJour = $response->viewData('echeancesDuJour');
+        $echeancesEnRetard = $response->viewData('echeancesEnRetard');
+
+        $this->assertTrue($echeancesDuJour->pluck('id')->contains($active->id));
+        $this->assertEquals(1, $echeancesDuJour->count());
+        $this->assertEquals(0, $echeancesEnRetard->count());
+    }
 }
