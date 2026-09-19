@@ -76,7 +76,7 @@
                                     </thead>
                                     <tbody>
                                         @foreach($plan->echeances as $e)
-                                            <tr x-data="{ openAnnuler: false, openReactiver: false }">
+                                            <tr x-data="{ openAnnuler: false, openReactiver: false, openSupprimer: false }">
                                                 <td class="border-b py-2 px-3">{{ $e->due_date->format('d/m/Y') }}</td>
                                                 <td class="border-b py-2 px-3 text-right font-medium">{{ number_format($e->amount, 0, ',', ' ') }}</td>
                                                 <td class="border-b py-2 px-3 text-center">
@@ -104,6 +104,10 @@
                                                                 <button type="submit" class="text-indigo-600 hover:underline">Marquer réglée</button>
                                                             </form>
                                                             <button type="button" @click="openAnnuler = true" class="text-red-600 hover:underline">Annuler</button>
+                                                            {{-- Distinct de l'annulation : ceci efface la ligne et
+                                                                 diminue le cout total, reserve a une erreur de saisie
+                                                                 (point 2 du 19/09/2026). --}}
+                                                            <button type="button" @click="openSupprimer = true" class="text-gray-500 hover:underline">Supprimer</button>
 
                                                             {{-- Fenetre de l'application, sur le modele de
                                                                  x-prolonger-delai-modal : ni prompt() ni confirm(),
@@ -134,6 +138,43 @@
                                                                                     Confirmer l'annulation
                                                                                 </button>
                                                                                 <button type="button" @click="openAnnuler = false" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 sm:mt-0 sm:w-auto sm:text-sm">
+                                                                                    Fermer
+                                                                                </button>
+                                                                            </div>
+                                                                        </form>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            {{-- Confirmation rappelant date et montant, sur le meme
+                                                                 modele que la fenetre d'annulation du 14/09/2026. --}}
+                                                            <div x-show="openSupprimer" class="fixed inset-0 z-50 overflow-y-auto" style="display: none;" role="dialog" aria-modal="true">
+                                                                <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+                                                                    <div x-show="openSupprimer" x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="ease-in duration-200" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" @click="openSupprimer = false" aria-hidden="true"></div>
+
+                                                                    <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+
+                                                                    <div x-show="openSupprimer" x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95" x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100" x-transition:leave="ease-in duration-200" x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100" x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95" class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full whitespace-normal">
+                                                                        <form method="POST" action="{{ route('admin.echeances.supprimer', $e) }}">
+                                                                            @csrf
+                                                                            @method('DELETE')
+                                                                            <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                                                                                <h3 class="text-lg leading-6 font-medium text-gray-900 mb-2">Supprimer l'échéance</h3>
+                                                                                <p class="text-sm text-gray-500 mb-2">
+                                                                                    {{ $e->due_date->format('d/m/Y') }} — {{ number_format($e->amount, 0, ',', ' ') }} {{ $plan->currency }}
+                                                                                </p>
+                                                                                <p class="text-sm text-gray-500">
+                                                                                    Cette échéance disparaîtra du tableau et le coût total du plan
+                                                                                    diminuera de {{ number_format($e->amount, 0, ',', ' ') }} {{ $plan->currency }}.
+                                                                                    À réserver à une erreur de saisie : si la formation est abandonnée,
+                                                                                    utilisez plutôt « Arrêter la formation ».
+                                                                                </p>
+                                                                            </div>
+                                                                            <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse gap-2">
+                                                                                <button type="submit" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-gray-700 text-base font-medium text-white hover:bg-gray-800 sm:w-auto sm:text-sm">
+                                                                                    Confirmer la suppression
+                                                                                </button>
+                                                                                <button type="button" @click="openSupprimer = false" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 sm:mt-0 sm:w-auto sm:text-sm">
                                                                                     Fermer
                                                                                 </button>
                                                                             </div>

@@ -436,7 +436,7 @@ class AdminTest extends TestCase
         $response = $this->actingAs($this->getAdminUser())->get(route('admin.students.plan.edit', $student));
 
         $response->assertOk();
-        $response->assertSee('x-data="{ openAnnuler: false, openReactiver: false }"', false);
+        $response->assertSee('x-data="{ openAnnuler: false, openReactiver: false, openSupprimer: false }"', false);
         $response->assertSee('Annuler l\'échéance', false);
         $response->assertSee('Motif (facultatif)', false);
         $response->assertSee('Confirmer l\'annulation', false);
@@ -880,5 +880,111 @@ class AdminTest extends TestCase
         $this->assertEquals(40000, $plan->total_amount);
         $this->assertEquals(0, $plan->echeances()->where('status', 'pending')->count());
         $this->assertEquals(0, $plan->soldeRestant());
+    }
+
+    public function test_deleting_an_upcoming_installment_removes_it_and_lowers_the_total_amount(): void
+    {
+        $student = User::factory()->create();
+        $student->assignRole('student');
+        $admin = $this->getAdminUser();
+
+        $plan = \App\Models\PaymentPlan::create([
+            'student_id'     => $student->id,
+            'total_amount'   => 120000,
+            'advance_amount' => 0,
+        ]);
+
+        $echeance = \App\Models\StudentPayment::create([
+            'student_id'      => $student->id,
+            'payment_plan_id' => $plan->id,
+            'amount'          => 40000,
+            'due_date'        => now()->addDays(30),
+            'status'          => 'pending',
+        ]);
+
+        $response = $this->actingAs($admin)->delete(route('admin.echeances.supprimer', $echeance));
+
+        $response->assertRedirect();
+        $this->assertDatabaseMissing('student_payments', ['id' => $echeance->id]);
+
+        $plan->refresh();
+        $this->assertEquals(80000, $plan->total_amount);
+        $this->assertStringContainsString('supprimée', $plan->notes);
+        $this->assertStringContainsString(now()->format('d/m/Y'), $plan->notes);
+    }
+
+    public function test_a_paid_installment_cannot_be_deleted(): void
+    {
+        $student = User::factory()->create();
+        $student->assignRole('student');
+        $admin = $this->getAdminUser();
+
+        $plan = \App\Models\PaymentPlan::create([
+            'student_id'     => $student->id,
+            'total_amount'   => 120000,
+            'advance_amount' => 0,
+        ]);
+
+        $echeance = \App\Models\StudentPayment::create([
+            'student_id'      => $student->id,
+            'payment_plan_id' => $plan->id,
+            'amount'          => 40000,
+            'due_date'        => now()->subDays(5),
+            'paid_date'       => now()->subDays(5),
+            'status'          => 'paid',
+        ]);
+
+        $response = $this->actingAs($admin)->delete(route('admin.echeances.supprimer', $echeance));
+
+        $response->assertSessionHasErrors('echeance');
+        $this->assertDatabaseHas('student_payments', ['id' => $echeance->id, 'status' => 'paid']);
+        $this->assertEquals(120000, $plan->fresh()->total_amount);
+    }
+
+    public function test_a_cancelled_installment_cannot_be_deleted(): void
+    {
+        $student = User::factory()->create();
+        $student->assignRole('student');
+        $admin = $this->getAdminUser();
+
+        $plan = \App\Models\PaymentPlan::create([
+            'student_id'     => $student->id,
+            'total_amount'   => 120000,
+            'advance_amount' => 0,
+        ]);
+
+        $echeance = \App\Models\StudentPayment::create([
+            'student_id'      => $student->id,
+            'payment_plan_id' => $plan->id,
+            'amount'          => 40000,
+            'due_date'        => now()->addDays(10),
+            'status'          => 'cancelled',
+        ]);
+
+        $response = $this->actingAs($admin)->delete(route('admin.echeances.supprimer', $echeance));
+
+        $response->assertSessionHasErrors('echeance');
+        $this->assertDatabaseHas('student_payments', ['id' => $echeance->id, 'status' => 'cancelled']);
+    }
+
+    public function test_manager_cannot_delete_an_installment(): void
+    {
+        $manager = User::factory()->create();
+        $manager->assignRole('manager');
+
+        $student = User::factory()->create();
+        $student->assignRole('student');
+
+        $echeance = \App\Models\StudentPayment::create([
+            'student_id' => $student->id,
+            'amount'     => 40000,
+            'due_date'   => now()->addDays(10),
+            'status'     => 'pending',
+        ]);
+
+        $response = $this->actingAs($manager)->delete(route('admin.echeances.supprimer', $echeance));
+
+        $response->assertForbidden();
+        $this->assertDatabaseHas('student_payments', ['id' => $echeance->id]);
     }
 }

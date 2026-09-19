@@ -215,6 +215,52 @@ class PaymentPlanController extends Controller
     }
 
     /**
+     * Supprime definitivement une echeance a venir : contrairement a
+     * l'annulation, la ligne n'existait pas vraiment (erreur de saisie), le
+     * cout total du plan diminue donc du meme montant (point 2 du
+     * 19/09/2026).
+     *
+     * Une echeance deja reglee ne se supprime jamais : le montant encaisse
+     * est un fait, pas une prevision qu'on peut effacer. Une echeance
+     * annulee non plus : elle porte deja sa propre trace dans les notes,
+     * la supprimer perdrait cette memoire pour rien, alors que le geste
+     * « Supprimer » vise justement les echeances a venir saisies par erreur.
+     */
+    public function supprimer(StudentPayment $echeance)
+    {
+        if ($echeance->status !== 'pending') {
+            throw ValidationException::withMessages([
+                'echeance' => 'Seule une échéance à venir peut être supprimée.',
+            ]);
+        }
+
+        $plan = $echeance->paymentPlan;
+
+        DB::transaction(function () use ($echeance, $plan) {
+            if ($plan) {
+                // On perd la ligne, pas la memoire de son existence : la
+                // suppression s'ajoute aux notes du plan avant que
+                // l'echeance elle-meme ne disparaisse du tableau.
+                $entree = sprintf(
+                    '[%s] Échéance du %s supprimée (%s)',
+                    now()->format('d/m/Y'),
+                    $echeance->due_date->format('d/m/Y'),
+                    number_format($echeance->amount, 0, ',', ' ').' '.$plan->currency
+                );
+
+                $plan->update([
+                    'total_amount' => max(0, (float) $plan->total_amount - (float) $echeance->amount),
+                    'notes'        => trim(($plan->notes ? $plan->notes."\n" : '').$entree),
+                ]);
+            }
+
+            $echeance->delete();
+        });
+
+        return back()->with('status', 'Échéance supprimée.');
+    }
+
+    /**
      * Programme suivi par l'apprenant, deduit de sa classe.
      *
      * Un apprenant est affecte a une classe, elle-meme rattachee a un niveau

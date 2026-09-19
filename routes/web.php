@@ -70,6 +70,10 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->grou
     // qu'au point 7 du 13/08/2026 pour les fiches de paie).
     Route::patch('/echeances/{echeance}/annuler', [\App\Http\Controllers\Admin\PaymentPlanController::class, 'annuler'])->name('echeances.annuler');
     Route::patch('/echeances/{echeance}/reactiver', [\App\Http\Controllers\Admin\PaymentPlanController::class, 'reactiver'])->name('echeances.reactiver');
+    // Suppression definitive (point 2 du 19/09/2026), distincte de
+    // l'annulation : l'echeance n'existait pas vraiment, elle disparait du
+    // tableau et le cout total du plan diminue d'autant.
+    Route::delete('/echeances/{echeance}', [\App\Http\Controllers\Admin\PaymentPlanController::class, 'supprimer'])->name('echeances.supprimer');
 
     // Vision previsionnelle des paiements attendus, tous apprenants
     // confondus, mois par mois (point 6).
