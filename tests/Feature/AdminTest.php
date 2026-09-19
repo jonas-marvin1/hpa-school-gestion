@@ -1135,4 +1135,111 @@ class AdminTest extends TestCase
         $response->assertForbidden();
         $this->assertEquals(120000, $plan->fresh()->total_amount);
     }
+
+    public function test_admin_can_resume_a_stopped_program_by_adding_an_installment(): void
+    {
+        $student = User::factory()->create();
+        $student->assignRole('student');
+        $admin = $this->getAdminUser();
+
+        // Dossier deja arrete : cout total ramene au montant regle, une
+        // echeance annulee visible dans l'historique.
+        $plan = \App\Models\PaymentPlan::create([
+            'student_id'     => $student->id,
+            'total_amount'   => 40000,
+            'advance_amount' => 0,
+            'notes'          => '[19/09/2026] Formation arrêtée',
+        ]);
+
+        $annulee = \App\Models\StudentPayment::create([
+            'student_id'      => $student->id,
+            'payment_plan_id' => $plan->id,
+            'amount'          => 80000,
+            'due_date'        => now()->addDays(10),
+            'status'          => 'cancelled',
+        ]);
+
+        $response = $this->actingAs($admin)->post(route('admin.plans.echeances.store', $plan), [
+            'amount'   => 40000,
+            'due_date' => now()->addDays(30)->format('Y-m-d'),
+        ]);
+
+        $response->assertRedirect();
+
+        $plan->refresh();
+        $this->assertEquals(80000, $plan->total_amount);
+        $this->assertEquals(1, $plan->echeances()->where('status', 'pending')->count());
+        $this->assertEquals(40000, $plan->echeances()->where('status', 'pending')->sum('amount'));
+
+        // L'echeance annulee reste visible et exclue du solde : pas de
+        // second plan, celui-ci est simplement rallonge.
+        $annulee->refresh();
+        $this->assertSame('cancelled', $annulee->status);
+        $this->assertEquals(1, \App\Models\PaymentPlan::where('student_id', $student->id)->count());
+    }
+
+    public function test_adding_an_installment_with_a_past_date_is_refused(): void
+    {
+        $student = User::factory()->create();
+        $student->assignRole('student');
+        $admin = $this->getAdminUser();
+
+        $plan = \App\Models\PaymentPlan::create([
+            'student_id'     => $student->id,
+            'total_amount'   => 40000,
+            'advance_amount' => 0,
+        ]);
+
+        $response = $this->actingAs($admin)->post(route('admin.plans.echeances.store', $plan), [
+            'amount'   => 40000,
+            'due_date' => now()->subDays(1)->format('Y-m-d'),
+        ]);
+
+        $response->assertSessionHasErrors('due_date');
+        $this->assertEquals(40000, $plan->fresh()->total_amount);
+    }
+
+    public function test_adding_an_installment_with_a_zero_amount_is_refused(): void
+    {
+        $student = User::factory()->create();
+        $student->assignRole('student');
+        $admin = $this->getAdminUser();
+
+        $plan = \App\Models\PaymentPlan::create([
+            'student_id'     => $student->id,
+            'total_amount'   => 40000,
+            'advance_amount' => 0,
+        ]);
+
+        $response = $this->actingAs($admin)->post(route('admin.plans.echeances.store', $plan), [
+            'amount'   => 0,
+            'due_date' => now()->addDays(10)->format('Y-m-d'),
+        ]);
+
+        $response->assertSessionHasErrors('amount');
+        $this->assertEquals(40000, $plan->fresh()->total_amount);
+    }
+
+    public function test_manager_cannot_add_an_installment(): void
+    {
+        $manager = User::factory()->create();
+        $manager->assignRole('manager');
+
+        $student = User::factory()->create();
+        $student->assignRole('student');
+
+        $plan = \App\Models\PaymentPlan::create([
+            'student_id'     => $student->id,
+            'total_amount'   => 40000,
+            'advance_amount' => 0,
+        ]);
+
+        $response = $this->actingAs($manager)->post(route('admin.plans.echeances.store', $plan), [
+            'amount'   => 40000,
+            'due_date' => now()->addDays(10)->format('Y-m-d'),
+        ]);
+
+        $response->assertForbidden();
+        $this->assertEquals(40000, $plan->fresh()->total_amount);
+    }
 }

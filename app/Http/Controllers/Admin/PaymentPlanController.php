@@ -306,6 +306,39 @@ class PaymentPlanController extends Controller
     }
 
     /**
+     * Ajoute une echeance a un plan existant : c'est le mecanisme de
+     * reprise d'un apprenant qui revient apres un arret, ou d'un ajustement
+     * de calendrier ponctuel (point 4 du 19/09/2026). Un seul plan de
+     * paiement par apprenant, jamais de second plan a creer.
+     */
+    public function ajouterEcheance(Request $request, PaymentPlan $plan)
+    {
+        $valide = $request->validate([
+            'amount'   => 'required|numeric|min:1',
+            'due_date' => 'required|date|after:today',
+        ], [], ['amount' => 'montant', 'due_date' => 'date']);
+
+        DB::transaction(function () use ($plan, $valide) {
+            StudentPayment::create([
+                'student_id'      => $plan->student_id,
+                'program_id'      => $plan->program_id,
+                'payment_plan_id' => $plan->id,
+                'amount'          => $valide['amount'],
+                'due_date'        => $valide['due_date'],
+                'status'          => 'pending',
+            ]);
+
+            // Le cout total remonte du meme montant : la nouvelle echeance
+            // s'ajoute a ce qui etait deja du, elle ne le remplace pas.
+            $plan->update([
+                'total_amount' => (float) $plan->total_amount + (float) $valide['amount'],
+            ]);
+        });
+
+        return back()->with('status', 'Échéance ajoutée.');
+    }
+
+    /**
      * Programme suivi par l'apprenant, deduit de sa classe.
      *
      * Un apprenant est affecte a une classe, elle-meme rattachee a un niveau

@@ -33,16 +33,69 @@
                     // reste au moins une.
                     $echeancesAVenirArret = $plan->echeances->where('status', 'pending');
                 @endphp
-                <div class="bg-white shadow-sm sm:rounded-lg" x-data="{ openArreter: false }">
+                <div class="bg-white shadow-sm sm:rounded-lg" x-data="{ openArreter: false, openAjouter: false }">
                     <div class="p-6">
                         <div class="flex items-start justify-between gap-4 mb-5">
                             <h3 class="text-gray-500 text-sm font-semibold uppercase tracking-wide">Situation</h3>
-                            @if($echeancesAVenirArret->isNotEmpty())
-                                <button type="button" @click="openArreter = true"
-                                        class="shrink-0 text-sm font-medium text-red-700 border border-red-300 rounded-md px-3 py-1.5 hover:bg-red-50">
-                                    Arrêter la formation
+                            <div class="flex items-center gap-2">
+                                {{-- Reprise d'une formation interrompue, ou simple
+                                     ajustement de calendrier (point 4 du 19/09/2026) :
+                                     toujours proposee, meme sur un dossier solde. --}}
+                                <button type="button" @click="openAjouter = true"
+                                        class="shrink-0 text-sm font-medium text-indigo-700 border border-indigo-300 rounded-md px-3 py-1.5 hover:bg-indigo-50">
+                                    + Ajouter une échéance
                                 </button>
-                            @endif
+                                @if($echeancesAVenirArret->isNotEmpty())
+                                    <button type="button" @click="openArreter = true"
+                                            class="shrink-0 text-sm font-medium text-red-700 border border-red-300 rounded-md px-3 py-1.5 hover:bg-red-50">
+                                        Arrêter la formation
+                                    </button>
+                                @endif
+                            </div>
+                        </div>
+
+                        {{-- Fenetre d'ajout d'une echeance : une date et un montant,
+                             aucune confirmation de type « rappel de montants » n'est
+                             necessaire, il ne s'agit pas d'un geste destructif. --}}
+                        <div x-show="openAjouter" class="fixed inset-0 z-50 overflow-y-auto" style="display: none;" role="dialog" aria-modal="true">
+                            <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+                                <div x-show="openAjouter" x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="ease-in duration-200" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" @click="openAjouter = false" aria-hidden="true"></div>
+
+                                <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+
+                                <div x-show="openAjouter" x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95" x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100" x-transition:leave="ease-in duration-200" x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100" x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95" class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full whitespace-normal">
+                                    <form method="POST" action="{{ route('admin.plans.echeances.store', $plan) }}">
+                                        @csrf
+                                        <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                                            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-2">Ajouter une échéance</h3>
+                                            <p class="text-sm text-gray-500 mb-4">
+                                                Le coût total du plan augmentera du montant saisi. C'est le geste à
+                                                utiliser pour reprendre un dossier arrêté : l'apprenant garde le
+                                                même plan, son historique et ses échéances annulées.
+                                            </p>
+
+                                            <div class="mb-4">
+                                                <label class="block text-sm font-medium text-gray-700 mb-1">Date d'échéance</label>
+                                                <input type="date" name="due_date" min="{{ now()->addDay()->format('Y-m-d') }}" required
+                                                       class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                            </div>
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700 mb-1">Montant</label>
+                                                <input type="number" name="amount" step="1" min="1" required
+                                                       class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                            </div>
+                                        </div>
+                                        <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse gap-2">
+                                            <button type="submit" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-indigo-600 text-base font-medium text-white hover:bg-indigo-700 sm:w-auto sm:text-sm">
+                                                Ajouter
+                                            </button>
+                                            <button type="button" @click="openAjouter = false" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 sm:mt-0 sm:w-auto sm:text-sm">
+                                                Fermer
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
                         </div>
 
                         {{-- Fenetre de l'application, sur le meme modele que les

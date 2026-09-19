@@ -77,6 +77,9 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->grou
     // Arret d'une formation abandonnee : solde le dossier en un geste
     // (point 3 du 19/09/2026).
     Route::patch('/plans/{plan}/arreter', [\App\Http\Controllers\Admin\PaymentPlanController::class, 'arreter'])->name('plans.arreter');
+    // Reprise d'une formation interrompue : ajoute une echeance au plan
+    // existant plutot que d'en creer un second (point 4 du 19/09/2026).
+    Route::post('/plans/{plan}/echeances', [\App\Http\Controllers\Admin\PaymentPlanController::class, 'ajouterEcheance'])->name('plans.echeances.store');
 
     // Vision previsionnelle des paiements attendus, tous apprenants
     // confondus, mois par mois (point 6).
