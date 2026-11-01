@@ -112,11 +112,13 @@
                                     <td class="border-b py-2 px-4 flex gap-2">
                                         <a href="{{ route('manager.sessions.show', $session) }}" class="text-indigo-600 hover:underline">Détails</a>
                                         <a href="{{ route('manager.sessions.edit', $session) }}" class="text-indigo-600 hover:underline">Modifier</a>
+                                        @role('admin')
                                         <form action="{{ route('manager.sessions.destroy', $session) }}" method="POST" onsubmit="return confirm('Êtes-vous sûr de vouloir supprimer cette session ?');">
                                             @csrf
                                             @method('DELETE')
                                             <button type="submit" class="text-red-600 hover:underline">Supprimer</button>
                                         </form>
+                                        @endrole
                                     </td>
                                 </tr>
                             @empty

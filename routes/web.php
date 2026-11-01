@@ -101,7 +101,11 @@ Route::middleware(['auth', 'role:manager|admin'])->prefix('manager')->name('mana
     // Declaree avant le resource : sinon "export" serait capture par la
     // route GET sessions/{session} du resource.
     Route::get('/sessions/export', [ClassSessionController::class, 'export'])->name('sessions.export');
-    Route::resource('sessions', ClassSessionController::class);
+    Route::resource('sessions', ClassSessionController::class)->except(['destroy']);
+    // Suppression d'une session : reservee a l'administrateur (fiche du
+    // 01/11/2026). Le reste du resource reste ouvert au manager.
+    Route::delete('sessions/{session}', [ClassSessionController::class, 'destroy'])
+        ->middleware('role:admin')->name('sessions.destroy');
 
     // Fiches de paie : le manager prepare et consulte, il ne decaisse pas.
     // La generation reste ouverte, elle ne fait que constituer les fiches a

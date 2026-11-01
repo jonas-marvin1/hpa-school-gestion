@@ -34,6 +34,23 @@ class ManagerTest extends TestCase
         return $admin;
     }
 
+    private function creerSession(): ClassSession
+    {
+        $program = \App\Models\Program::factory()->create(['name' => 'Prog']);
+        $level = \App\Models\Level::factory()->create(['program_id' => $program->id, 'name' => 'Niveau']);
+        $class = CourseClass::factory()->create(['level_id' => $level->id, 'name' => 'Classe']);
+        $coach = User::factory()->create();
+        $coach->assignRole('coach');
+
+        return ClassSession::factory()->create([
+            'course_class_id' => $class->id,
+            'coach_id' => $coach->id,
+            'start_time' => '2026-06-05 10:00:00',
+            'end_time' => '2026-06-05 12:00:00',
+            'status' => 'scheduled',
+        ]);
+    }
+
     public function test_manager_can_access_dashboard(): void
     {
         $response = $this->actingAs($this->getManagerUser())->get(route('manager.dashboard'));
@@ -201,6 +218,56 @@ class ManagerTest extends TestCase
 
         $response->assertRedirect(route('manager.sessions.index'));
         $this->assertSame('2026-06-20 15:00:00', $session->fresh()->start_time->format('Y-m-d H:i:s'));
+    }
+
+    public function test_admin_can_delete_session(): void
+    {
+        $session = $this->creerSession();
+
+        $response = $this->actingAs($this->getAdminUser())->delete(route('manager.sessions.destroy', $session));
+
+        $response->assertRedirect(route('manager.sessions.index'));
+        $this->assertDatabaseMissing('class_sessions', ['id' => $session->id]);
+    }
+
+    public function test_manager_cannot_delete_session(): void
+    {
+        $session = $this->creerSession();
+
+        $response = $this->actingAs($this->getManagerUser())->delete(route('manager.sessions.destroy', $session));
+
+        $response->assertStatus(403);
+        $this->assertDatabaseHas('class_sessions', ['id' => $session->id]);
+    }
+
+    public function test_coach_cannot_delete_session(): void
+    {
+        $session = $this->creerSession();
+        $coach = User::factory()->create();
+        $coach->assignRole('coach');
+
+        $this->actingAs($coach)->delete(route('manager.sessions.destroy', $session))->assertStatus(403);
+        $this->assertDatabaseHas('class_sessions', ['id' => $session->id]);
+    }
+
+    public function test_delete_button_is_hidden_from_manager_but_shown_to_admin(): void
+    {
+        $this->creerSession();
+
+        $this->actingAs($this->getManagerUser())->get(route('manager.sessions.index'))
+            ->assertOk()->assertDontSee('Supprimer')->assertSee('Modifier');
+
+        $this->actingAs($this->getAdminUser())->get(route('manager.sessions.index'))
+            ->assertOk()->assertSee('Supprimer');
+    }
+
+    public function test_manager_can_still_edit_and_view_session(): void
+    {
+        $session = $this->creerSession();
+        $manager = $this->getManagerUser();
+
+        $this->actingAs($manager)->get(route('manager.sessions.show', $session))->assertOk();
+        $this->actingAs($manager)->get(route('manager.sessions.edit', $session))->assertOk();
     }
 
     public function test_manager_can_view_payments(): void
