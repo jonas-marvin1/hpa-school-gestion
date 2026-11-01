@@ -10,7 +10,7 @@ projet à chaque session.
 - Blade + Tailwind CSS 3 + Alpine.js (pas de framework front séparé)
 - Spatie Laravel Permission pour les rôles
 - MariaDB en développement, MySQL en production (hébergement mutualisé)
-- PHPUnit — 86 tests, à garder au vert
+- PHPUnit — 167 tests, à garder au vert
 
 Modèle métier et décisions de conception : voir
 [docs/architecture.md](docs/architecture.md).
